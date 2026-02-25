@@ -1,24 +1,47 @@
-name: sen_annonces
-description: Petites annonces au Sénégal
-version: 1.0.0+1
+import 'package:flutter/material.dart';
 
-environment:
-  sdk: '>=3.0.0 <4.0.0'
+void main() {
+  runApp(const SenAnnoncesApp());
+}
 
-dependencies:
-  flutter:
-    sdk: flutter
-  supabase_flutter: ^2.3.0
-  http: ^1.1.0
-  cached_network_image: ^3.3.1
-  shared_preferences: ^2.2.2
-  go_router: ^13.0.0
-  url_launcher: ^6.2.4
+class SenAnnoncesApp extends StatelessWidget {
+  const SenAnnoncesApp({super.key});
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.0
-
-flutter:
-  uses-material-design: true
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Sen Annonces',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF00853F),
+        ),
+      ),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF00853F),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.campaign, size: 100, color: Colors.white),
+              SizedBox(height: 20),
+              Text(
+                'Sen Annonces',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Petites annonces au Senegal',
+                style: TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
