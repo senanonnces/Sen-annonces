@@ -33,18 +33,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   ];
 
   final List<String> _cities = [
-    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
-    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
+    'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
   ];
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Selectionnez une categorie'),
-            backgroundColor: Colors.orange),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Selectionnez une categorie'), backgroundColor: Colors.orange));
       return;
     }
     setState(() => _loading = true);
@@ -61,21 +57,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'is_active': true,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Annonce publiee avec succes!'),
-            backgroundColor: Color(0xFF00853F),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Annonce publiee!'), backgroundColor: Color(0xFF00853F)));
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Erreur: ${e.toString()}'),
-              backgroundColor: Colors.red),
-        );
+            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -84,12 +73,16 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _priceCtrl.dispose();
-    _descCtrl.dispose();
-    _phoneCtrl.dispose();
-    super.dispose();
+    _titleCtrl.dispose(); _priceCtrl.dispose();
+    _descCtrl.dispose(); _phoneCtrl.dispose(); super.dispose();
   }
+
+  InputDecoration _dec(String hint) => InputDecoration(
+    hintText: hint, filled: true, fillColor: const Color(0xFFF5F5F5),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -97,165 +90,94 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF00853F),
-        title: const Text('Publier une annonce',
-            style: TextStyle(color: Colors.white)),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Publier une annonce', style: TextStyle(color: Colors.white)),
+        leading: IconButton(icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle('1. Choisissez une categorie'),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 0.85),
-                itemCount: _categories.length,
-                itemBuilder: (_, i) {
-                  final cat = _categories[i];
-                  final selected = _selectedCategory == cat['name'];
-                  return GestureDetector(
-                    onTap: () =>
-                        setState(() => _selectedCategory = cat['name'] as String),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? const Color(0xFF00853F)
-                            : const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(cat['icon'] as IconData,
-                              color: selected ? Colors.white : Colors.grey,
-                              size: 24),
-                          const SizedBox(height: 4),
-                          Text(cat['name'] as String,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 9,
-                                  color: selected
-                                      ? Colors.white
-                                      : Colors.black87,
-                                  fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              _sectionTitle('2. Informations'),
-              _buildLabel('Titre *'),
-              TextFormField(
-                controller: _titleCtrl,
-                decoration: _inputDec('Ex: Toyota Corolla 2019'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Prix (FCFA) *'),
-              TextFormField(
-                controller: _priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: _inputDec('Ex: 500000'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Ville *'),
-              DropdownButtonFormField<String>(
-                value: _selectedCity,
-                hint: const Text('Selectionnez votre ville'),
-                decoration: _inputDec(''),
-                items: _cities
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedCity = v),
-                validator: (v) =>
-                    v == null ? 'Selectionnez une ville' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Telephone *'),
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: _inputDec('+221 77 XXX XX XX'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Description *'),
-              TextFormField(
-                controller: _descCtrl,
-                maxLines: 4,
-                decoration: _inputDec('Decrivez votre annonce en detail...'),
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton.icon(
-                  onPressed: _loading ? null : _submit,
-                  icon: const Icon(Icons.publish, color: Colors.white),
-                  label: _loading
-                      ? const CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2)
-                      : const Text('Publier l annonce',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00853F),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Categorie', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
+            const SizedBox(height: 12),
+            GridView.builder(
+              shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4, crossAxisSpacing: 8, mainAxisSpacing: 8, childAspectRatio: 0.85),
+              itemCount: _categories.length,
+              itemBuilder: (_, i) {
+                final cat = _categories[i];
+                final selected = _selectedCategory == cat['name'];
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = cat['name'] as String),
+                  child: Container(
+                    decoration: BoxDecoration(
+                        color: selected ? const Color(0xFF00853F) : const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(cat['icon'] as IconData,
+                          color: selected ? Colors.white : Colors.grey, size: 24),
+                      const SizedBox(height: 4),
+                      Text(cat['name'] as String, textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 9,
+                              color: selected ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w500)),
+                    ]),
                   ),
-                ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            const Text('Titre *', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(controller: _titleCtrl, decoration: _dec('Ex: Toyota Corolla 2019'),
+                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+            const SizedBox(height: 14),
+            const Text('Prix FCFA *', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(controller: _priceCtrl, keyboardType: TextInputType.number,
+                decoration: _dec('Ex: 500000'),
+                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+            const SizedBox(height: 14),
+            const Text('Ville *', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _selectedCity, hint: const Text('Selectionnez'),
+              decoration: _dec(''),
+              items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (v) => setState(() => _selectedCity = v),
+              validator: (v) => v == null ? 'Selectionnez une ville' : null,
+            ),
+            const SizedBox(height: 14),
+            const Text('Telephone *', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(controller: _phoneCtrl, keyboardType: TextInputType.phone,
+                decoration: _dec('+221 77 XXX XX XX'),
+                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+            const SizedBox(height: 14),
+            const Text('Description *', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            TextFormField(controller: _descCtrl, maxLines: 4,
+                decoration: _dec('Decrivez votre annonce...'),
+                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity, height: 54,
+              child: ElevatedButton.icon(
+                onPressed: _loading ? null : _submit,
+                icon: const Icon(Icons.publish, color: Colors.white),
+                label: _loading
+                    ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                    : const Text('Publier', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
               ),
-              const SizedBox(height: 30),
-            ],
-          ),
+            ),
+            const SizedBox(height: 30),
+          ]),
         ),
       ),
     );
   }
-
-  Widget _sectionTitle(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(text,
-          style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF00853F))));
-
-  Widget _buildLabel(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
-
-  InputDecoration _inputDec(String hint) => InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: const Color(0xFFF5F5F5),
-      border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: Color(0xFF00853F), width: 2)));
 }
