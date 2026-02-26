@@ -20,8 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _selectedCity;
 
   final List<String> _cities = [
-    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
-    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
+    'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
   ];
 
   Future<void> _register() async {
@@ -38,26 +37,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         },
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Compte cree avec succes!'),
-            backgroundColor: Color(0xFF00853F),
-          ),
-        );
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+            backgroundColor: Color(0xFF00853F)));
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -66,13 +55,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passCtrl.dispose();
-    _pass2Ctrl.dispose();
-    super.dispose();
+    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose();
+    _passCtrl.dispose(); _pass2Ctrl.dispose(); super.dispose();
   }
+
+  InputDecoration _dec(String hint, IconData icon) => InputDecoration(
+    hintText: hint,
+    prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
+    filled: true, fillColor: const Color(0xFFF5F5F5),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -81,10 +75,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF00853F),
         title: const Text('Creer un compte', style: TextStyle(color: Colors.white)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.pop(context)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -94,62 +86,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 10),
-                _buildLabel('Nom complet *'),
-                _buildField(_nameCtrl, 'Votre nom complet', Icons.person_outline,
+                const Text('Nom complet *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextFormField(controller: _nameCtrl, decoration: _dec('Votre nom', Icons.person_outline),
                     validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
                 const SizedBox(height: 14),
-                _buildLabel('Email *'),
-                _buildField(_emailCtrl, 'exemple@email.com', Icons.email_outlined,
-                    type: TextInputType.emailAddress,
+                const Text('Email *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextFormField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress,
+                    decoration: _dec('exemple@email.com', Icons.email_outlined),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Champ obligatoire';
                       if (!v.contains('@')) return 'Email invalide';
                       return null;
                     }),
                 const SizedBox(height: 14),
-                _buildLabel('Telephone *'),
-                _buildField(_phoneCtrl, '+221 77 XXX XX XX', Icons.phone_outlined,
-                    type: TextInputType.phone,
+                const Text('Telephone *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextFormField(controller: _phoneCtrl, keyboardType: TextInputType.phone,
+                    decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
                     validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
                 const SizedBox(height: 14),
-                _buildLabel('Ville *'),
+                const Text('Ville *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _selectedCity,
                   hint: const Text('Selectionnez votre ville'),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF00853F)),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
-                  ),
+                  decoration: _dec('', Icons.location_on_outlined),
                   items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (v) => setState(() => _selectedCity = v),
                   validator: (v) => v == null ? 'Selectionnez une ville' : null,
                 ),
                 const SizedBox(height: 14),
-                _buildLabel('Mot de passe *'),
+                const Text('Mot de passe *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller: _passCtrl,
-                  obscureText: _obscure,
-                  decoration: InputDecoration(
-                    hintText: 'Min. 6 caracteres',
-                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
+                  controller: _passCtrl, obscureText: _obscure,
+                  decoration: _dec('Min. 6 caracteres', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ obligatoire';
@@ -158,24 +135,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 14),
-                _buildLabel('Confirmer mot de passe *'),
+                const Text('Confirmer mot de passe *', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller: _pass2Ctrl,
-                  obscureText: _obscure,
-                  decoration: InputDecoration(
-                    hintText: 'Repetez le mot de passe',
-                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
-                  ),
+                  controller: _pass2Ctrl, obscureText: _obscure,
+                  decoration: _dec('Repetez le mot de passe', Icons.lock_outline),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ obligatoire';
-                    if (v != _passCtrl.text) return 'Les mots de passe ne correspondent pas';
+                    if (v != _passCtrl.text) return 'Mots de passe differents';
                     return null;
                   },
                 ),
@@ -184,46 +151,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   width: double.infinity, height: 52,
                   child: ElevatedButton(
                     onPressed: _loading ? null : _register,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00853F),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                     child: _loading
                         ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                         : const Text("S'inscrire",
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                const SizedBox(height: 20),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLabel(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
-
-  Widget _buildField(TextEditingController ctrl, String hint, IconData icon,
-      {TextInputType type = TextInputType.text, String? Function(String?)? validator}) {
-    return TextFormField(
-      controller: ctrl,
-      keyboardType: type,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
-        filled: true,
-        fillColor: const Color(0xFFF5F5F5),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
-      ),
-      validator: validator,
     );
   }
 }
