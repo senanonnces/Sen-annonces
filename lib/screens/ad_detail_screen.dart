@@ -7,16 +7,17 @@ class AdDetailScreen extends StatelessWidget {
   String _formatPrice(dynamic price) {
     if (price == null) return '0';
     final p = int.tryParse(price.toString()) ?? 0;
-    if (p >= 1000000) return '\${(p / 1000000).toStringAsFixed(1)} M';
-    if (p >= 1000) return '\${(p / 1000).toStringAsFixed(0)} K';
+    if (p >= 1000000) return '${(p / 1000000).toStringAsFixed(1)} M';
+    if (p >= 1000) return '${(p / 1000).toStringAsFixed(0)} K';
     return p.toString();
   }
 
   void _showDialog(BuildContext context, bool isCall) {
+    final phone = ad['phone'] ?? '+221 XX XXX XX XX';
     showDialog(context: context, builder: (_) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Text(isCall ? 'Appeler le vendeur' : 'Contacter le vendeur'),
-      content: Text(isCall ? 'Numero: \${ad['phone'] ?? '+221 XX XXX XX XX'}' : 'Message au vendeur'),
+      content: Text(isCall ? 'Numero: $phone' : 'Message au vendeur'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
         ElevatedButton(
@@ -30,6 +31,12 @@ class AdDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = ad['title'] ?? '';
+    final category = ad['category'] ?? '';
+    final city = ad['city'] ?? '';
+    final description = ad['description'] ?? 'Aucune description.';
+    final priceText = '${_formatPrice(ad['price'])} FCFA';
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: CustomScrollView(
@@ -62,17 +69,17 @@ class AdDetailScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                           color: const Color(0xFF00853F).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8)),
-                      child: Text(ad['category'] ?? '',
+                      child: Text(category,
                           style: const TextStyle(color: Color(0xFF00853F), fontSize: 11, fontWeight: FontWeight.w600)),
                     ),
                     const Spacer(),
                     const Icon(Icons.location_on, size: 14, color: Colors.grey),
-                    Text(ad['city'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text(city, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ]),
                   const SizedBox(height: 10),
-                  Text(ad['title'] ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text('\${_formatPrice(ad['price'])} FCFA',
+                  Text(priceText,
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
                 ])),
               const SizedBox(height: 8),
@@ -80,8 +87,7 @@ class AdDetailScreen extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Description', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(ad['description'] ?? 'Aucune description.',
-                      style: const TextStyle(color: Colors.black87, height: 1.5)),
+                  Text(description, style: const TextStyle(color: Colors.black87, height: 1.5)),
                 ])),
               const SizedBox(height: 100),
             ]),
