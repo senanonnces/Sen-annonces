@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'register_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -13,20 +13,34 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  bool _obscure = true;
   bool _loading = false;
+  bool _obscure = true;
 
-  void _login() async {
+  final _supabase = Supabase.instance.client;
+
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _loading = false);
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
+    try {
+      await _supabase.auth.signInWithPassword(
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text.trim(),
       );
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -34,148 +48,122 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              height: 220,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF00853F), Color(0xFF005A2B)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(40),
-                  bottomRight: Radius.circular(40),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 40),
-                  Container(
-                    padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 40),
+                Center(
+                  child: Container(
+                    width: 90, height: 90,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
+                      color: const Color(0xFF00853F),
+                      borderRadius: BorderRadius.circular(22),
                     ),
-                    child: const Icon(Icons.campaign, size: 50, color: Color(0xFF00853F)),
+                    child: const Icon(Icons.campaign, size: 55, color: Colors.white),
                   ),
-                  const SizedBox(height: 12),
-                  const Text('Sen Annonces',
-                      style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                const SizedBox(height: 24),
+                const Center(
+                  child: Text('Sen Annonces',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
+                ),
+                const Center(
+                  child: Text('Connectez-vous à votre compte',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
+                ),
+                const SizedBox(height: 40),
+                const Text('Email', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    hintText: 'exemple@email.com',
+                    prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF00853F)),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF00853F), width: 2),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ obligatoire';
+                    if (!v.contains('@')) return 'Email invalide';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _passCtrl,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    hintText: '••••••••',
+                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF00853F), width: 2),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ obligatoire';
+                    if (v.length < 6) return 'Minimum 6 caractères';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00853F),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: _loading
+                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        : const Text('Se connecter',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 10),
-                    const Text('Connexion',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    const Text('Connectez-vous à votre compte',
-                        style: TextStyle(color: Colors.grey)),
-                    const SizedBox(height: 28),
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: _inputDecoration('Email ou téléphone', Icons.email_outlined),
-                      validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passCtrl,
-                      obscureText: _obscure,
-                      decoration: _inputDecoration(
-                        'Mot de passe',
-                        Icons.lock_outline,
-                        suffix: IconButton(
-                          icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() => _obscure = !_obscure),
-                        ),
-                      ),
-                      validator: (v) => v == null || v.length < 6 ? 'Minimum 6 caractères' : null,
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {},
-                        child: const Text('Mot de passe oublié?',
-                            style: TextStyle(color: Color(0xFF00853F))),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00853F),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: _loading
-                            ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                            : const Text('Se connecter',
-                                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Pas encore de compte? '),
-                        GestureDetector(
-                          onTap: () => Navigator.push(context,
-                              MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                          child: const Text('S\'inscrire',
-                              style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.arrow_back, size: 16, color: Colors.grey),
-                          SizedBox(width: 4),
-                          Text('Retour', style: TextStyle(color: Colors.grey)),
-                        ],
-                      ),
+                    const Text('Pas encore de compte? ', style: TextStyle(color: Colors.grey)),
+                    GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                      child: const Text('S\'inscrire',
+                          style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint, IconData icon, {Widget? suffix}) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: Colors.grey),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: const Color(0xFFF5F5F5),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2),
       ),
     );
   }
