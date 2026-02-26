@@ -25,20 +25,13 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passCtrl.text.trim(),
       );
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -46,11 +39,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _emailCtrl.dispose(); _passCtrl.dispose(); super.dispose(); }
+
+  InputDecoration _dec(String hint, IconData icon) => InputDecoration(
+    hintText: hint,
+    prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
+    filled: true, fillColor: const Color(0xFFF5F5F5),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -62,46 +60,27 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
-                Center(
-                  child: Container(
-                    width: 90, height: 90,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00853F),
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: const Icon(Icons.campaign, size: 55, color: Colors.white),
-                  ),
+                Container(
+                  width: 90, height: 90,
+                  decoration: BoxDecoration(color: const Color(0xFF00853F),
+                      borderRadius: BorderRadius.circular(22)),
+                  child: const Icon(Icons.campaign, size: 55, color: Colors.white),
                 ),
-                const SizedBox(height: 24),
-                const Center(
-                  child: Text('Sen Annonces',
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
-                ),
-                const SizedBox(height: 6),
-                const Center(
-                  child: Text('Connectez-vous a votre compte',
-                      style: TextStyle(fontSize: 14, color: Colors.grey)),
-                ),
+                const SizedBox(height: 20),
+                const Text('Sen Annonces',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
+                const Text('Connectez-vous a votre compte',
+                    style: TextStyle(fontSize: 14, color: Colors.grey)),
                 const SizedBox(height: 40),
-                const Text('Email', style: TextStyle(fontWeight: FontWeight.w600)),
+                Align(alignment: Alignment.centerLeft,
+                    child: const Text('Email', style: TextStyle(fontWeight: FontWeight.w600))),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    hintText: 'exemple@email.com',
-                    prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF00853F)),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
-                  ),
+                  decoration: _dec('exemple@email.com', Icons.email_outlined),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ obligatoire';
                     if (!v.contains('@')) return 'Email invalide';
@@ -109,25 +88,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w600)),
+                Align(alignment: Alignment.centerLeft,
+                    child: const Text('Mot de passe', style: TextStyle(fontWeight: FontWeight.w600))),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passCtrl,
                   obscureText: _obscure,
-                  decoration: InputDecoration(
-                    hintText: 'Min. 6 caracteres',
-                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
+                  decoration: _dec('Min. 6 caracteres', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ obligatoire';
@@ -140,14 +111,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity, height: 52,
                   child: ElevatedButton(
                     onPressed: _loading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00853F),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                     child: _loading
                         ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                         : const Text('Se connecter',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -156,8 +125,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Text('Pas encore de compte? ', style: TextStyle(color: Colors.grey)),
                     GestureDetector(
-                      onTap: () => Navigator.push(
-                          context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const RegisterScreen())),
                       child: const Text("S'inscrire",
                           style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
                     ),
