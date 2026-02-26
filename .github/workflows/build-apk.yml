@@ -27,11 +27,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android folder from Flutter
+      - name: Generate Android folder
         run: |
           flutter create --org com.senannonces --project-name sen_annonces --platforms android /tmp/flutter_base
           rm -rf android
           cp -r /tmp/flutter_base/android .
+          sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.23"/' android/build.gradle || true
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
