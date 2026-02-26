@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -14,34 +14,64 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final _confirmCtrl = TextEditingController();
-  bool _obscure = true;
+  final _pass2Ctrl = TextEditingController();
   bool _loading = false;
-
-  final List<String> _cities = [
-    'Dakar', 'Thiès', 'Saint-Louis', 'Ziguinchor',
-    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
-  ];
+  bool _obscure = true;
   String? _selectedCity;
 
-  void _register() async {
+  final List<String> _cities = [
+    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
+    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
+  ];
+
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _loading = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Compte créé avec succès!'),
-          backgroundColor: Color(0xFF00853F),
-        ),
+    try {
+      await Supabase.instance.client.auth.signUp(
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text.trim(),
+        data: {
+          'full_name': _nameCtrl.text.trim(),
+          'phone': _phoneCtrl.text.trim(),
+          'city': _selectedCity ?? '',
+        },
       );
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (_) => false,
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Compte cree avec succes!'),
+            backgroundColor: Color(0xFF00853F),
+          ),
+        );
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passCtrl.dispose();
+    _pass2Ctrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -50,133 +80,150 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF00853F),
-        title: const Text('Créer un compte', style: TextStyle(color: Colors.white)),
+        title: const Text('Creer un compte', style: TextStyle(color: Colors.white)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 10),
-              const Text('Rejoignez Sen Annonces',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              const Text('Créez votre compte gratuitement',
-                  style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 24),
-              _buildLabel('Nom complet'),
-              TextFormField(
-                controller: _nameCtrl,
-                decoration: _inputDecoration('Votre nom complet', Icons.person_outline),
-                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Email'),
-              TextFormField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _inputDecoration('exemple@email.com', Icons.email_outlined),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Champ obligatoire';
-                  if (!v.contains('@')) return 'Email invalide';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Téléphone'),
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: _inputDecoration('+221 XX XXX XX XX', Icons.phone_outlined),
-                validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Ville'),
-              DropdownButtonFormField<String>(
-                value: _selectedCity,
-                hint: const Text('Sélectionnez votre ville'),
-                decoration: _inputDecoration('', Icons.location_on_outlined),
-                items: _cities
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedCity = v),
-                validator: (v) => v == null ? 'Sélectionnez une ville' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Mot de passe'),
-              TextFormField(
-                controller: _passCtrl,
-                obscureText: _obscure,
-                decoration: _inputDecoration(
-                  'Minimum 6 caractères',
-                  Icons.lock_outline,
-                  suffix: IconButton(
-                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscure = !_obscure),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
+                _buildLabel('Nom complet *'),
+                _buildField(_nameCtrl, 'Votre nom complet', Icons.person_outline,
+                    validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+                const SizedBox(height: 14),
+                _buildLabel('Email *'),
+                _buildField(_emailCtrl, 'exemple@email.com', Icons.email_outlined,
+                    type: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Champ obligatoire';
+                      if (!v.contains('@')) return 'Email invalide';
+                      return null;
+                    }),
+                const SizedBox(height: 14),
+                _buildLabel('Telephone *'),
+                _buildField(_phoneCtrl, '+221 77 XXX XX XX', Icons.phone_outlined,
+                    type: TextInputType.phone,
+                    validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+                const SizedBox(height: 14),
+                _buildLabel('Ville *'),
+                DropdownButtonFormField<String>(
+                  value: _selectedCity,
+                  hint: const Text('Selectionnez votre ville'),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF00853F)),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+                  ),
+                  items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setState(() => _selectedCity = v),
+                  validator: (v) => v == null ? 'Selectionnez une ville' : null,
+                ),
+                const SizedBox(height: 14),
+                _buildLabel('Mot de passe *'),
+                TextFormField(
+                  controller: _passCtrl,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    hintText: 'Min. 6 caracteres',
+                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ obligatoire';
+                    if (v.length < 6) return 'Minimum 6 caracteres';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                _buildLabel('Confirmer mot de passe *'),
+                TextFormField(
+                  controller: _pass2Ctrl,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    hintText: 'Repetez le mot de passe',
+                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ obligatoire';
+                    if (v != _passCtrl.text) return 'Les mots de passe ne correspondent pas';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity, height: 52,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00853F),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: _loading
+                        ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        : const Text("S'inscrire",
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                validator: (v) => v == null || v.length < 6 ? 'Minimum 6 caractères' : null,
-              ),
-              const SizedBox(height: 14),
-              _buildLabel('Confirmer le mot de passe'),
-              TextFormField(
-                controller: _confirmCtrl,
-                obscureText: _obscure,
-                decoration: _inputDecoration('Répétez le mot de passe', Icons.lock_outline),
-                validator: (v) => v != _passCtrl.text ? 'Les mots de passe ne correspondent pas' : null,
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _register,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00853F),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: _loading
-                      ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                      : const Text('Créer mon compte',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Padding(
+  Widget _buildLabel(String text) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-    );
-  }
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
 
-  InputDecoration _inputDecoration(String hint, IconData icon, {Widget? suffix}) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon, color: Colors.grey),
-      suffixIcon: suffix,
-      filled: true,
-      fillColor: const Color(0xFFF5F5F5),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
+  Widget _buildField(TextEditingController ctrl, String hint, IconData icon,
+      {TextInputType type = TextInputType.text, String? Function(String?)? validator}) {
+    return TextFormField(
+      controller: ctrl,
+      keyboardType: type,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
+        filled: true,
+        fillColor: const Color(0xFFF5F5F5),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2),
-      ),
+      validator: validator,
     );
   }
 }
