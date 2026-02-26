@@ -83,8 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _formatPrice(dynamic price) {
     if (price == null) return '0';
     final p = int.tryParse(price.toString()) ?? 0;
-    if (p >= 1000000) return '\${(p / 1000000).toStringAsFixed(1)} M';
-    if (p >= 1000) return '\${(p / 1000).toStringAsFixed(0)} K';
+    if (p >= 1000000) return '${(p / 1000000).toStringAsFixed(1)} M';
+    if (p >= 1000) return '${(p / 1000).toStringAsFixed(0)} K';
     return p.toString();
   }
 
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16,16,16,8),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('\${_filteredAds.length} annonces', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text('${_filteredAds.length} annonces', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             if (_selectedCity != null && _selectedCity != 'Toutes')
               Chip(label: Text(_selectedCity!, style: const TextStyle(fontSize: 11)),
                   onDeleted: () => setState(() => _selectedCity = null),
@@ -214,12 +214,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildAdCard(Map<String, dynamic> ad) {
+    final price = '${_formatPrice(ad['price'])} FCFA';
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdDetailScreen(ad: ad))),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))]),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))]),
         child: Row(children: [
           Container(
             width: 90, height: 90,
@@ -234,8 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(ad['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   maxLines: 2, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
-              Text('\${_formatPrice(ad['price'])} FCFA',
-                  style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 13)),
+              Text(price, style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 4),
               Row(children: [
                 const Icon(Icons.location_on, size: 12, color: Colors.grey),
