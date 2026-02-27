@@ -32,19 +32,12 @@ jobs:
           flutter create --org com.senannonces --project-name sen_annonces --platforms android /tmp/flutter_base
           rm -rf android
           cp -r /tmp/flutter_base/android .
-          python3 -c "
-content = open('android/app/src/main/AndroidManifest.xml').read()
-perm = '<uses-permission android:name="android.permission.INTERNET"/>'
-perm2 = '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>'
-if 'INTERNET' not in content:
-    content = content.replace('<application', perm + chr(10) + '    ' + perm2 + chr(10) + '    <application')
-open('android/app/src/main/AndroidManifest.xml', 'w').write(content)
-print('Manifest updated')
-print(open('android/app/src/main/AndroidManifest.xml').read()[:300])
-"
+          sed -i 's|<manifest xmlns:android="http://schemas.android.com/apk/res/android">|<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>|' android/app/src/main/AndroidManifest.xml
           sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.23"/' android/build.gradle || true
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          echo "=== AndroidManifest.xml ==="
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Get dependencies
         run: flutter pub get
