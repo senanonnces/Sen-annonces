@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'ad_detail_screen.dart';
 import 'create_ad_screen.dart';
 import 'login_screen.dart';
@@ -105,6 +106,50 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) { return ''; }
   }
 
+  // Helper: get first valid image from ad
+  Widget _buildAdImage(Map<String, dynamic> ad, {double size = 90}) {
+    final paths = ad['image_paths'];
+    if (paths != null && paths is List && paths.isNotEmpty) {
+      final path = paths.first.toString();
+      if (path.isNotEmpty) {
+        final file = File(path);
+        return FutureBuilder<bool>(
+          future: file.exists(),
+          builder: (ctx, snap) {
+            if (snap.data == true) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(
+                  file,
+                  width: size, height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _categoryIcon(ad, size: size),
+                ),
+              );
+            }
+            return _categoryIcon(ad, size: size);
+          },
+        );
+      }
+    }
+    return _categoryIcon(ad, size: size);
+  }
+
+  Widget _categoryIcon(Map<String, dynamic> ad, {double size = 90}) {
+    final catData = _categories.firstWhere(
+      (c) => c['name'] == ad['category'],
+      orElse: () => {'icon': Icons.campaign, 'color': const Color(0xFF00853F)},
+    );
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        color: (catData['color'] as Color).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(catData['icon'] as IconData, color: catData['color'] as Color, size: size * 0.45),
+    );
+  }
+
   Widget _buildHomeTab() {
     final filtered = _filteredAds;
     return RefreshIndicator(
@@ -115,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SliverToBoxAdapter(
             child: Column(
               children: [
-                // Header
+                // Header with gradient
                 Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
@@ -129,29 +174,33 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.campaign, color: Colors.white, size: 28),
-                          const SizedBox(width: 8),
-                          const Text('Sen Annonces',
-                              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                          const Spacer(),
-                          // City filter
-                          GestureDetector(
-                            onTap: () => _showCityFilter(),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.location_on, color: Colors.white, size: 14),
-                                  const SizedBox(width: 4),
-                                  Text(_selectedCity ?? 'Toutes',
-                                      style: const TextStyle(color: Colors.white, fontSize: 12)),
-                                  const Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
-                                ],
-                              ),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Bonjour, ${_currentUser?['name']?.toString().split(' ').first ?? 'Visiteur'}!',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                ),
+                                const Text('Sen Annonces',
+                                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.campaign, color: Colors.white, size: 16),
+                                const SizedBox(width: 4),
+                                Text('${filtered.length} annonces',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              ],
                             ),
                           ),
                         ],
@@ -161,14 +210,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
                         ),
                         child: TextField(
                           onChanged: (v) => setState(() => _searchQuery = v),
                           decoration: InputDecoration(
-                            hintText: 'Rechercher des annonces...',
-                            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                            hintText: 'Rechercher une annonce...',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
                             prefixIcon: const Icon(Icons.search, color: Color(0xFF00853F)),
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? IconButton(
@@ -184,256 +233,234 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                // Categories
-                SizedBox(
-                  height: 95,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    itemCount: _categories.length,
-                    itemBuilder: (_, i) {
-                      final cat = _categories[i];
-                      final isSelected = _selectedCategory == cat['name'] ||
-                          (_selectedCategory == null && cat['name'] == 'Tout');
-                      return GestureDetector(
-                        onTap: () => setState(() =>
-                            _selectedCategory = cat['name'] == 'Tout' ? null : cat['name']),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          child: Column(
-                            children: [
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 52, height: 52,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? (cat['color'] as Color)
-                                      : (cat['color'] as Color).withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: isSelected ? [
-                                    BoxShadow(color: (cat['color'] as Color).withOpacity(0.4),
-                                        blurRadius: 8, offset: const Offset(0, 3))
-                                  ] : [],
-                                ),
-                                child: Icon(cat['icon'] as IconData,
-                                    color: isSelected ? Colors.white : cat['color'] as Color,
-                                    size: 26),
+
+                // Categories horizontal scroll
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: SizedBox(
+                    height: 72,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _categories.length,
+                      itemBuilder: (_, i) {
+                        final cat = _categories[i];
+                        final isSelected = (_selectedCategory ?? 'Tout') == cat['name'];
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedCategory = cat['name'] == 'Tout' ? null : cat['name']),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(right: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? cat['color'] as Color : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? cat['color'] as Color : Colors.grey.shade200,
                               ),
-                              const SizedBox(height: 5),
-                              Text(cat['name'] as String,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                    color: isSelected ? cat['color'] as Color : Colors.grey[600],
-                                  )),
-                            ],
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(cat['icon'] as IconData,
+                                    color: isSelected ? Colors.white : cat['color'] as Color,
+                                    size: 20),
+                                const SizedBox(height: 3),
+                                Text(cat['name'] as String,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: isSelected ? Colors.white : Colors.grey[700],
+                                    )),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                // Results count
-                if (_searchQuery.isNotEmpty || _selectedCategory != null || _selectedCity != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: Row(
-                      children: [
-                        Text('${filtered.length} annonce(s) trouvee(s)',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                        const Spacer(),
-                        if (_selectedCategory != null || _selectedCity != null)
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _selectedCategory = null;
-                              _selectedCity = null;
-                              _searchQuery = '';
-                            }),
-                            child: const Text('Effacer filtres',
-                                style: TextStyle(color: Color(0xFF00853F), fontSize: 12)),
-                          ),
-                      ],
+                        );
+                      },
                     ),
                   ),
+                ),
+
+                // City filter
+                Container(
+                  color: Colors.grey[50],
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Color(0xFF00853F), size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Ville:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 32,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _cities.length,
+                            itemBuilder: (_, i) {
+                              final city = _cities[i];
+                              final isSelected = (_selectedCity ?? 'Toutes') == city;
+                              return GestureDetector(
+                                onTap: () => setState(() => _selectedCity = city == 'Toutes' ? null : city),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFF00853F) : Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isSelected ? const Color(0xFF00853F) : Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Text(city,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: isSelected ? Colors.white : Colors.grey[700],
+                                      )),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          // Ads grid
-          filtered.isEmpty
-              ? SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
-                        const SizedBox(height: 12),
-                        Text(
-                          _ads.isEmpty
-                              ? 'Aucune annonce pour le moment\nSoyez le premier a publier!'
-                              : 'Aucun resultat pour votre recherche',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                        ),
-                        if (_ads.isEmpty) ...[
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () => setState(() => _currentIndex = 2),
-                            icon: const Icon(Icons.add, color: Colors.white),
-                            label: const Text('Publier une annonce',
-                                style: TextStyle(color: Colors.white)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00853F),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                )
-              : SliverPadding(
-                  padding: const EdgeInsets.all(12),
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _buildAdCard(filtered[i]),
-                      childCount: filtered.length,
-                    ),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.75,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildAdCard(Map<String, dynamic> ad) {
-    final isFav = _favorites.contains(ad['id']);
-    final cat = _categories.firstWhere(
-      (c) => c['name'] == ad['category'],
-      orElse: () => _categories.last,
-    );
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(context,
-            MaterialPageRoute(builder: (_) => AdDetailScreen(ad: ad, onFavoriteToggle: _toggleFavorite, isFavorite: isFav)));
-        _loadData();
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: const Offset(0, 2))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image area
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              child: Container(
-                height: 110,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [(cat['color'] as Color).withOpacity(0.15), (cat['color'] as Color).withOpacity(0.05)],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Center(child: Icon(cat['icon'] as IconData, size: 48, color: (cat['color'] as Color).withOpacity(0.5))),
-                    Positioned(
-                      top: 6, right: 6,
-                      child: GestureDetector(
-                        onTap: () => _toggleFavorite(ad['id']),
-                        child: Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)]),
-                          child: Icon(isFav ? Icons.favorite : Icons.favorite_border,
-                              color: isFav ? Colors.red : Colors.grey, size: 16),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 6, left: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: cat['color'] as Color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(ad['category'] ?? '',
-                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
+          // Ads list
+          if (filtered.isEmpty)
+            SliverFillRemaining(
+              child: Center(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(ad['title'] ?? '',
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                    const Spacer(),
-                    Text(_formatPrice(ad['price']),
-                        style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, size: 11, color: Colors.grey),
-                        const SizedBox(width: 2),
-                        Expanded(child: Text(ad['city'] ?? '',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.grey, fontSize: 10))),
-                        Text(_timeAgo(ad['created_at']),
-                            style: const TextStyle(color: Colors.grey, fontSize: 9)),
-                      ],
+                    Icon(Icons.search_off, size: 72, color: Colors.grey[300]),
+                    const SizedBox(height: 16),
+                    Text('Aucune annonce trouvee',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 15, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Text('Soyez le premier a publier!',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: () => setState(() => _currentIndex = 1),
+                      icon: const Icon(Icons.add, color: Colors.white),
+                      label: const Text('Publier une annonce', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00853F),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
                     ),
                   ],
                 ),
               ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(12),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) {
+                    final ad = filtered[i];
+                    final isFav = _favorites.contains(ad['id']);
+                    return GestureDetector(
+                      onTap: () async {
+                        await Navigator.push(ctx, MaterialPageRoute(
+                          builder: (_) => AdDetailScreen(
+                            ad: ad,
+                            onFavoriteToggle: _toggleFavorite,
+                            isFavorite: isFav,
+                          ),
+                        ));
+                        _loadData(); // Refresh after returning
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                        ),
+                        child: Row(
+                          children: [
+                            // Image
+                            Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: _buildAdImage(ad, size: 90),
+                            ),
+                            // Details
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(0, 10, 10, 10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(ad['title'] ?? '',
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => _toggleFavorite(ad['id']),
+                                          child: Icon(
+                                            isFav ? Icons.favorite : Icons.favorite_border,
+                                            color: isFav ? Colors.red : Colors.grey[400],
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(_formatPrice(ad['price']),
+                                        style: const TextStyle(
+                                            color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 15)),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.location_on, size: 13, color: Colors.grey[500]),
+                                        const SizedBox(width: 2),
+                                        Text(ad['city'] ?? '',
+                                            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                        const SizedBox(width: 8),
+                                        if (ad['category'] != null) ...[
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey[100],
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(ad['category'] ?? '',
+                                                style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.w600)),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(_timeAgo(ad['created_at']),
+                                        style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showCityFilter() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          const Text('Filtrer par ville', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          ..._cities.map((city) => ListTile(
-            leading: Icon(Icons.location_on,
-                color: _selectedCity == city || (city == 'Toutes' && _selectedCity == null)
-                    ? const Color(0xFF00853F) : Colors.grey),
-            title: Text(city),
-            trailing: _selectedCity == city || (city == 'Toutes' && _selectedCity == null)
-                ? const Icon(Icons.check, color: Color(0xFF00853F)) : null,
-            onTap: () {
-              setState(() => _selectedCity = city == 'Toutes' ? null : city);
-              Navigator.pop(context);
-            },
-          )),
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -441,75 +468,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = [
+    final List<Widget> screens = [
       _buildHomeTab(),
+      CreateAdScreen(onAdCreated: () {
+        _loadData();
+        setState(() => _currentIndex = 0);
+      }),
       FavoritesScreen(favorites: _favorites, ads: _ads, onToggle: _toggleFavorite),
-      CreateAdScreen(onAdCreated: () { _loadData(); setState(() => _currentIndex = 0); }),
       ProfileScreen(user: _currentUser),
     ];
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: SafeArea(child: tabs[_currentIndex]),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () => setState(() => _currentIndex = 2),
-              backgroundColor: const Color(0xFF00853F),
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('Publier', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            children: [
-              _navItem(Icons.home_outlined, Icons.home, 'Accueil', 0),
-              _navItem(Icons.favorite_outline, Icons.favorite, 'Favoris', 1),
-              const Expanded(child: SizedBox()),
-              _navItem(Icons.person_outline, Icons.person, 'Profil', 3),
-              _navItem(Icons.logout, Icons.logout, 'Quitter', 4),
-            ],
-          ),
-        ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
       ),
-    );
-  }
-
-  Widget _navItem(IconData icon, IconData activeIcon, String label, int index) {
-    final isActive = _currentIndex == index;
-    return Expanded(
-      child: InkWell(
-        onTap: () async {
-          if (index == 4) {
-            // Logout
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('is_logged_in', false);
-            await prefs.remove('current_user');
-            if (mounted) {
-              Navigator.pushAndRemoveUntil(context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
-            }
-            return;
-          }
-          setState(() => _currentIndex = index);
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (i) {
+          if (i == 0) _loadData(); // Refresh when going to home
+          setState(() => _currentIndex = i);
         },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(isActive ? activeIcon : icon,
-                color: isActive ? const Color(0xFF00853F) : Colors.grey, size: 22),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10,
-                    color: isActive ? const Color(0xFF00853F) : Colors.grey,
-                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
-          ],
-        ),
+        selectedItemColor: const Color(0xFF00853F),
+        unselectedItemColor: Colors.grey[500],
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        elevation: 10,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+        unselectedLabelStyle: const TextStyle(fontSize: 11),
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Accueil'),
+          const BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), activeIcon: Icon(Icons.add_circle), label: 'Publier'),
+          BottomNavigationBarItem(
+            icon: Stack(children: [
+              const Icon(Icons.favorite_outline),
+              if (_favorites.isNotEmpty) Positioned(
+                right: 0, top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  child: Text('${_favorites.length}', style: const TextStyle(color: Colors.white, fontSize: 8)),
+                ),
+              ),
+            ]),
+            activeIcon: const Icon(Icons.favorite),
+            label: 'Favoris',
+          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profil'),
+        ],
       ),
     );
   }
