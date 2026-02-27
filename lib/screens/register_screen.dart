@@ -22,7 +22,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
   ];
 
-  // Generate a fake unique email from phone number to bypass email confirmation
   String _phoneToEmail(String phone) {
     final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
     return 'user_$clean@senannonces.app';
@@ -36,7 +35,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passCtrl.text.trim();
 
     try {
-      // Try to sign up first
       final response = await Supabase.instance.client.auth.signUp(
         email: fakeEmail,
         password: password,
@@ -44,22 +42,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'full_name': _nameCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
           'city': _selectedCity ?? 'Dakar',
-          'display_name': _nameCtrl.text.trim(),
         },
       );
 
       if (!mounted) return;
 
       if (response.session != null) {
-        // Logged in directly - success!
+        // Success - logged in directly
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Compte cree avec succes! Bienvenue!'),
+            content: Text('Compte cree! Bienvenue!'),
             backgroundColor: Color(0xFF00853F)));
         Navigator.pushAndRemoveUntil(context,
             MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
-      } else {
-        // Email confirmation required - try sign in instead
-        // (user may already be registered)
+      } else if (response.user != null) {
+        // User created but email confirmation required
+        // Try login anyway
         try {
           await Supabase.instance.client.auth.signInWithPassword(
             email: fakeEmail,
@@ -71,48 +68,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
           }
         } catch (_) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Compte cree! Connectez-vous maintenant avec votre telephone et mot de passe.'),
-              backgroundColor: Color(0xFF00853F),
-              duration: Duration(seconds: 4),
-            ));
+            _showSuccess('Compte cree! Connectez-vous avec votre telephone.');
             Navigator.pop(context);
           }
         }
       }
     } catch (e) {
       if (!mounted) return;
-      String errorMsg = e.toString();
 
-      if (errorMsg.contains('already registered') || errorMsg.contains('already been registered')) {
-        // Account exists - try to login directly
+      final rawError = e.toString();
+
+      // Check for specific known errors only
+      if (rawError.contains('already registered') || rawError.contains('already been registered') || rawError.contains('User already')) {
+        // Try login directly
         try {
           await Supabase.instance.client.auth.signInWithPassword(
             email: fakeEmail,
             password: password,
           );
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Connexion reussie!'),
-                backgroundColor: Color(0xFF00853F)));
             Navigator.pushAndRemoveUntil(context,
                 MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
           }
           return;
         } catch (loginErr) {
-          errorMsg = 'Ce numero est deja enregistre. Verifiez votre mot de passe.';
+          _showError('Ce numero est deja enregistre. Verifiez votre mot de passe.\n\nErreur: ${loginErr.toString().replaceAll('AuthException:', '').trim()}');
+          return;
         }
-      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup') || errorMsg.contains('Failed')) {
-        errorMsg = 'Erreur de connexion internet. Verifiez votre connexion et reessayez.';
-      } else if (errorMsg.contains('Password should be') || errorMsg.contains('weak_password')) {
-        errorMsg = 'Mot de passe trop faible. Utilisez au moins 6 caracteres.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red, duration: const Duration(seconds: 5)));
+      if (rawError.contains('SocketException') || rawError.contains('host lookup') || rawError.contains('Connection refused') || rawError.contains('Network is unreachable')) {
+        _showError('Pas de connexion internet. Verifiez votre Wi-Fi ou 4G.');
+        return;
+      }
+
+      // Show the REAL error for debugging
+      _showError('Erreur: ${rawError.replaceAll('AuthException:', '').replaceAll('Exception:', '').trim()}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [
+          Icon(Icons.error_outline, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Erreur', style: TextStyle(color: Colors.red)),
+        ]),
+        content: SelectableText(msg, style: const TextStyle(fontSize: 13)),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F)),
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccess(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: const Color(0xFF00853F),
+        duration: const Duration(seconds: 4)));
   }
 
   @override
@@ -149,7 +174,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 10),
-                // Info banner
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -157,18 +181,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFF00853F).withOpacity(0.3)),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.phone_android, color: Color(0xFF00853F), size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Inscription par numero de telephone - pas besoin d\'email!',
-                          style: TextStyle(color: Color(0xFF00853F), fontSize: 12, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: const Row(children: [
+                    Icon(Icons.phone_android, color: Color(0xFF00853F), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(
+                      'Inscription par numero de telephone',
+                      style: TextStyle(color: Color(0xFF00853F), fontSize: 12, fontWeight: FontWeight.w500),
+                    )),
+                  ]),
                 ),
                 const SizedBox(height: 20),
                 _label('Nom complet *'),
