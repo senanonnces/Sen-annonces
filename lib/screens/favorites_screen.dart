@@ -77,7 +77,7 @@ class FavoritesScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(ad['title'] ?? '', fontWeight: FontWeight.bold,
+                                Text(ad['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold),
                                     maxLines: 2, overflow: TextOverflow.ellipsis),
                                 const SizedBox(height: 4),
                                 Text(_formatPrice(ad['price']),
