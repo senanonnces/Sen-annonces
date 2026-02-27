@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../main.dart';
@@ -22,34 +21,38 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   String? _selectedCategory;
   String? _selectedCity;
   List<File> _images = [];
+  String _uploadStatus = '';
   final ImagePicker _picker = ImagePicker();
 
-  String? _carBrand, _carModel, _carYear, _carCondition;
+  // Car fields
+  String? _carBrand, _carYear, _carCondition;
   final _kmCtrl = TextEditingController();
+  // Real estate fields
   String? _propType, _propDeal;
   final _surfaceCtrl = TextEditingController();
   final _roomsCtrl = TextEditingController();
+  // Electronics fields
   String? _techCondition;
   final _brandCtrl = TextEditingController();
+  // Employment fields
   String? _jobType;
   final _salaryCtrl = TextEditingController();
 
   final List<Map<String, dynamic>> _categories = [
-    {'name': 'Voitures', 'icon': Icons.directions_car, 'color': Color(0xFF1565C0)},
-    {'name': 'Immobilier', 'icon': Icons.home, 'color': Color(0xFF6A1B9A)},
-    {'name': 'Electronique', 'icon': Icons.phone_android, 'color': Color(0xFF00838F)},
-    {'name': 'Emploi', 'icon': Icons.work, 'color': Color(0xFFE65100)},
-    {'name': 'Mode', 'icon': Icons.checkroom, 'color': Color(0xFFC2185B)},
-    {'name': 'Maison', 'icon': Icons.chair, 'color': Color(0xFF558B2F)},
-    {'name': 'Sport', 'icon': Icons.sports_soccer, 'color': Color(0xFF1976D2)},
-    {'name': 'Animaux', 'icon': Icons.pets, 'color': Color(0xFF5D4037)},
-    {'name': 'Services', 'icon': Icons.build, 'color': Color(0xFF37474F)},
-    {'name': 'Autre', 'icon': Icons.more_horiz, 'color': Color(0xFF757575)},
+    {'name': 'Voitures',    'icon': Icons.directions_car,  'color': Color(0xFF1565C0)},
+    {'name': 'Immobilier',  'icon': Icons.home,            'color': Color(0xFF6A1B9A)},
+    {'name': 'Electronique','icon': Icons.phone_android,   'color': Color(0xFF00838F)},
+    {'name': 'Emploi',      'icon': Icons.work,            'color': Color(0xFFE65100)},
+    {'name': 'Mode',        'icon': Icons.checkroom,       'color': Color(0xFFC2185B)},
+    {'name': 'Maison',      'icon': Icons.chair,           'color': Color(0xFF558B2F)},
+    {'name': 'Sport',       'icon': Icons.sports_soccer,   'color': Color(0xFF1976D2)},
+    {'name': 'Animaux',     'icon': Icons.pets,            'color': Color(0xFF5D4037)},
+    {'name': 'Services',    'icon': Icons.build,           'color': Color(0xFF37474F)},
+    {'name': 'Autre',       'icon': Icons.more_horiz,      'color': Color(0xFF757575)},
   ];
 
   final List<String> _cities = [
-    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
-    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
+    'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
   ];
 
   @override
@@ -60,43 +63,57 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     }
   }
 
+  // ─── Pick multiple images ───────────────────────────────────────────────
   Future<void> _pickImages() async {
-    final picked = await _picker.pickMultiImage(imageQuality: 70);
-    if (picked.isNotEmpty) {
-      setState(() => _images = picked.map((x) => File(x.path)).toList());
+    try {
+      final picked = await _picker.pickMultiImage(imageQuality: 75, limit: 6);
+      if (picked.isNotEmpty) {
+        setState(() {
+          _images = picked.map((x) => File(x.path)).toList();
+        });
+      }
+    } catch (e) {
+      // fallback: pick single
+      try {
+        final single = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+        if (single != null) setState(() => _images = [File(single.path)]);
+      } catch (_) {}
     }
   }
 
+  // ─── Upload images to Supabase Storage ──────────────────────────────────
   Future<List<String>> _uploadImages() async {
     List<String> urls = [];
     for (int i = 0; i < _images.length; i++) {
+      setState(() => _uploadStatus = 'Envoi photo ${i + 1}/${_images.length}...');
       try {
         final bytes = await _images[i].readAsBytes();
-        final fileName = 'ad_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
-        await supabase.storage.from('listings').uploadBinary(fileName, bytes);
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'img_${ts}_$i.jpg';
+        await supabase.storage
+            .from('listings')
+            .uploadBinary(fileName, bytes);
         final url = supabase.storage.from('listings').getPublicUrl(fileName);
         urls.add(url);
       } catch (e) {
-        // skip failed image
+        debugPrint('Image $i upload failed: $e');
       }
     }
+    setState(() => _uploadStatus = '');
     return urls;
   }
 
+  // ─── Publish ad ─────────────────────────────────────────────────────────
   Future<void> _publishAd() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategory == null) {
-      _showError('Selectionnez une categorie');
-      return;
-    }
+    if (_selectedCategory == null) { _showError('Selectionnez une categorie'); return; }
     setState(() => _loading = true);
-
     try {
-      List<String> imageUrls = await _uploadImages();
+      final imageUrls = await _uploadImages();
 
       Map<String, dynamic> attributes = {};
       if (_selectedCategory == 'Voitures') {
-        attributes = {'brand': _carBrand, 'model': _carModel, 'year': _carYear, 'km': _kmCtrl.text, 'condition': _carCondition};
+        attributes = {'brand': _carBrand, 'year': _carYear, 'km': _kmCtrl.text, 'condition': _carCondition};
       } else if (_selectedCategory == 'Immobilier') {
         attributes = {'type': _propType, 'deal': _propDeal, 'surface': _surfaceCtrl.text, 'rooms': _roomsCtrl.text};
       } else if (_selectedCategory == 'Electronique') {
@@ -117,12 +134,13 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'images': imageUrls,
         'attributes': attributes,
         'is_boosted': false,
+        'status': 'active',
       });
 
       widget.onAdCreated();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Annonce publiee avec succes!'),
+          content: Text('Annonce publiee avec succes! ✅'),
           backgroundColor: Color(0xFF00853F),
         ));
         Navigator.pop(context);
@@ -136,9 +154,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
       setState(() => _loading = false);
     }
   }
@@ -158,6 +174,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Category ──
               _sectionTitle('Categorie *'),
               Wrap(
                 spacing: 8, runSpacing: 8,
@@ -181,35 +198,81 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 16),
-              _sectionTitle('Photos'),
+
+              // ── Photos ──
+              _sectionTitle('Photos (max 6)'),
               GestureDetector(
-                onTap: _pickImages,
+                onTap: _loading ? null : _pickImages,
                 child: Container(
-                  height: 100,
+                  constraints: const BoxConstraints(minHeight: 100),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
+                    border: Border.all(color: const Color(0xFF00853F), width: 1.5),
                     borderRadius: BorderRadius.circular(12),
-                    color: Colors.grey[50],
+                    color: Colors.green[50],
                   ),
                   child: _images.isEmpty
-                      ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.add_a_photo, color: Colors.grey, size: 32),
-                          Text('Ajouter des photos', style: TextStyle(color: Colors.grey)),
-                        ]))
-                      : ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _images.length,
-                          itemBuilder: (_, i) => Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(_images[i], width: 80, height: 80, fit: BoxFit.cover),
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Column(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.add_photo_alternate, color: Color(0xFF00853F), size: 40),
+                              SizedBox(height: 8),
+                              Text('Appuyez pour ajouter des photos',
+                                  style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.w500)),
+                              Text('Jusqu\'a 6 photos', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ]),
+                          ),
+                        )
+                      : Column(children: [
+                          SizedBox(
+                            height: 110,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.all(8),
+                              itemCount: _images.length,
+                              itemBuilder: (_, i) => Stack(
+                                children: [
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(_images[i], width: 90, height: 90, fit: BoxFit.cover),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 0, right: 4,
+                                    child: GestureDetector(
+                                      onTap: () => setState(() => _images.removeAt(i)),
+                                      child: Container(
+                                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                        child: const Icon(Icons.close, color: Colors.white, size: 18),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                          TextButton.icon(
+                            onPressed: _pickImages,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: Text('Ajouter plus (${_images.length}/6)'),
+                          ),
+                        ]),
                 ),
               ),
+              if (_uploadStatus.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(children: [
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00853F))),
+                    const SizedBox(width: 8),
+                    Text(_uploadStatus, style: const TextStyle(color: Color(0xFF00853F))),
+                  ]),
+                ),
               const SizedBox(height: 16),
+
+              // ── Fields ──
               _buildField(_titleCtrl, 'Titre *', Icons.title,
                   validator: (v) => (v == null || v.isEmpty) ? 'Titre requis' : null),
               const SizedBox(height: 12),
@@ -235,14 +298,15 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                   keyboardType: TextInputType.phone,
                   validator: (v) => (v == null || v.isEmpty) ? 'Telephone requis' : null),
 
-              if (_selectedCategory == 'Voitures') ..._buildCarFields(),
+              // ── Category specific ──
+              if (_selectedCategory == 'Voitures')   ..._buildCarFields(),
               if (_selectedCategory == 'Immobilier') ..._buildRealEstateFields(),
               if (_selectedCategory == 'Electronique') ..._buildElectroFields(),
-              if (_selectedCategory == 'Emploi') ..._buildJobFields(),
+              if (_selectedCategory == 'Emploi')     ..._buildJobFields(),
 
               const SizedBox(height: 24),
               SizedBox(
-                width: double.infinity, height: 52,
+                width: double.infinity, height: 54,
                 child: ElevatedButton(
                   onPressed: _loading ? null : _publishAd,
                   style: ElevatedButton.styleFrom(
@@ -251,11 +315,15 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _loading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                          const SizedBox(width: 12),
+                          Text(_uploadStatus.isNotEmpty ? _uploadStatus : 'Publication...'),
+                        ])
                       : const Text("Publier l'annonce", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -264,10 +332,10 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   }
 
   List<Widget> _buildCarFields() => [
-    const SizedBox(height: 16),
-    _sectionTitle('Details Vehicule'),
+    const SizedBox(height: 16), _sectionTitle('Details Vehicule'),
     Row(children: [
-      Expanded(child: _buildDropdown('Marque', ['Toyota','Peugeot','Renault','Mercedes','BMW','Honda','Hyundai','Kia','Nissan','Ford','Autre'],
+      Expanded(child: _buildDropdown('Marque',
+          ['Toyota','Peugeot','Renault','Mercedes','BMW','Honda','Hyundai','Kia','Nissan','Ford','Autre'],
           _carBrand, (v) => setState(() => _carBrand = v))),
       const SizedBox(width: 8),
       Expanded(child: _buildField(_kmCtrl, 'Kilometrage', Icons.speed, keyboardType: TextInputType.number)),
@@ -283,8 +351,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   ];
 
   List<Widget> _buildRealEstateFields() => [
-    const SizedBox(height: 16),
-    _sectionTitle('Details Immobilier'),
+    const SizedBox(height: 16), _sectionTitle('Details Immobilier'),
     Row(children: [
       Expanded(child: _buildDropdown('Type', ['Appartement','Villa','Studio','Maison','Terrain','Bureau'],
           _propType, (v) => setState(() => _propType = v))),
@@ -301,8 +368,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   ];
 
   List<Widget> _buildElectroFields() => [
-    const SizedBox(height: 16),
-    _sectionTitle('Details Electronique'),
+    const SizedBox(height: 16), _sectionTitle('Details Electronique'),
     Row(children: [
       Expanded(child: _buildField(_brandCtrl, 'Marque', Icons.business)),
       const SizedBox(width: 8),
@@ -312,8 +378,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   ];
 
   List<Widget> _buildJobFields() => [
-    const SizedBox(height: 16),
-    _sectionTitle('Details Emploi'),
+    const SizedBox(height: 16), _sectionTitle('Details Emploi'),
     Row(children: [
       Expanded(child: _buildDropdown('Type contrat', ['CDI','CDD','Stage','Freelance','Temps partiel'],
           _jobType, (v) => setState(() => _jobType = v))),
@@ -324,25 +389,22 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   Widget _sectionTitle(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF333333))),
   );
 
   Widget _buildField(TextEditingController ctrl, String label, IconData icon, {
     TextInputType? keyboardType, int maxLines = 1, String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: ctrl, keyboardType: keyboardType,
-      maxLines: maxLines, validator: validator,
-      decoration: InputDecoration(
-        labelText: label, prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true, fillColor: Colors.grey[50],
-      ),
-    );
-  }
+  }) => TextFormField(
+    controller: ctrl, keyboardType: keyboardType, maxLines: maxLines, validator: validator,
+    decoration: InputDecoration(
+      labelText: label, prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      filled: true, fillColor: Colors.grey[50],
+    ),
+  );
 
-  Widget _buildDropdown(String label, List<String> items, String? value, ValueChanged<String?> onChanged) {
-    return DropdownButtonFormField<String>(
+  Widget _buildDropdown(String label, List<String> items, String? value, ValueChanged<String?> onChanged) =>
+    DropdownButtonFormField<String>(
       value: value,
       decoration: InputDecoration(
         labelText: label,
@@ -353,5 +415,4 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 13)))).toList(),
       onChanged: onChanged,
     );
-  }
 }
