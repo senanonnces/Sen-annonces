@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'login_screen.dart';
+import 'ad_detail_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -12,6 +14,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _myAds = [];
+  bool _loading = true;
 
   @override
   void initState() {
@@ -20,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadMyAds() async {
+    setState(() => _loading = true);
     final prefs = await SharedPreferences.getInstance();
     final adsJson = prefs.getString('ads') ?? '[]';
     final allAds = List<Map<String, dynamic>>.from(
@@ -29,6 +33,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _myAds = userId != null
           ? allAds.where((a) => a['user_id'] == userId).toList()
           : [];
+      _loading = false;
     });
   }
 
@@ -54,23 +59,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final adsJson = prefs.getString('ads') ?? '[]';
       final allAds = List<Map<String, dynamic>>.from(
           (jsonDecode(adsJson) as List).map((e) => Map<String, dynamic>.from(e)));
+      
+      // Also delete image files
+      final adToDelete = allAds.firstWhere((a) => a['id'] == adId, orElse: () => {});
+      if (adToDelete.isNotEmpty) {
+        final paths = adToDelete['image_paths'];
+        if (paths != null && paths is List) {
+          for (final path in paths) {
+            try {
+              final f = File(path.toString());
+              if (await f.exists()) await f.delete();
+            } catch (_) {}
+          }
+        }
+      }
+      
       allAds.removeWhere((a) => a['id'] == adId);
       await prefs.setString('ads', jsonEncode(allAds));
       _loadMyAds();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Annonce supprimee'), backgroundColor: Colors.red));
+            const SnackBar(content: Text('Annonce supprimee avec succes'), backgroundColor: Colors.red));
       }
     }
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_logged_in', false);
-    await prefs.remove('current_user');
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Deconnexion'),
+        content: const Text('Voulez-vous vous deconnecter?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Se deconnecter', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_logged_in', false);
+      await prefs.remove('current_user');
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
+      }
     }
   }
 
@@ -82,133 +120,209 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '$p FCFA';
   }
 
+  Widget _buildAdImage(Map<String, dynamic> ad) {
+    final paths = ad['image_paths'];
+    if (paths != null && paths is List && paths.isNotEmpty) {
+      final path = paths.first.toString();
+      if (path.isNotEmpty) {
+        return FutureBuilder<bool>(
+          future: File(path).exists(),
+          builder: (_, snap) {
+            if (snap.data == true) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(File(path), width: 60, height: 60, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _defaultAdIcon()),
+              );
+            }
+            return _defaultAdIcon();
+          },
+        );
+      }
+    }
+    return _defaultAdIcon();
+  }
+
+  Widget _defaultAdIcon() => Container(
+    width: 60, height: 60,
+    decoration: BoxDecoration(
+      color: const Color(0xFF00853F).withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: const Icon(Icons.campaign, color: Color(0xFF00853F), size: 28),
+  );
+
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            automaticallyImplyLeading: false,
-            backgroundColor: const Color(0xFF00853F),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
+      body: RefreshIndicator(
+        color: const Color(0xFF00853F),
+        onRefresh: _loadMyAds,
+        child: CustomScrollView(
+          slivers: [
+            // Profile Header
+            SliverToBoxAdapter(
+              child: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Color(0xFF00853F), Color(0xFF00A651)],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                 ),
+                padding: const EdgeInsets.fromLTRB(16, 50, 16, 30),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 40),
                     CircleAvatar(
                       radius: 45,
-                      backgroundColor: Colors.white,
+                      backgroundColor: Colors.white.withOpacity(0.2),
                       child: Text(
-                        user != null && user['name'] != null
-                            ? user['name'].toString().substring(0, 1).toUpperCase()
-                            : '?',
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Color(0xFF00853F)),
+                        (user?['name']?.toString() ?? 'U').substring(0, 1).toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(user?['name'] ?? 'Utilisateur',
-                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
                     Text(user?['phone'] ?? '',
-                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        style: const TextStyle(color: Colors.white70, fontSize: 15)),
+                    if (user?['city'] != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.white70, size: 14),
+                          const SizedBox(width: 4),
+                          Text(user!['city'], style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    // Stats
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _statBox('${_myAds.length}', 'Annonces'),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                onPressed: _logout,
-                tooltip: 'Se deconnecter',
+
+            // My Ads section
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.campaign, color: Color(0xFF00853F), size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Mes annonces',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const Spacer(),
+                    if (_loading)
+                      const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00853F)),
+                      ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                // Stats row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      _statCard('Mes annonces', _myAds.length.toString(), Icons.campaign),
-                      const SizedBox(width: 10),
-                      _statCard('Ville', user?['city'] ?? 'N/A', Icons.location_on),
-                      const SizedBox(width: 10),
-                      _statCard('Membre', 'Actif', Icons.verified_user),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // My ads section
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      const Text('Mes annonces',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const Spacer(),
-                      Text('${_myAds.length} annonce(s)',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
             ),
-          ),
-          _myAds.isEmpty
-              ? SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.campaign_outlined, size: 60, color: Colors.grey[300]),
-                        const SizedBox(height: 12),
-                        Text('Vous n\'avez pas encore d\'annonces',
-                            style: TextStyle(color: Colors.grey[500])),
-                      ],
-                    ),
+
+            if (!_loading && _myAds.isEmpty)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
                   ),
-                )
-              : SliverList(
+                  child: Column(
+                    children: [
+                      Icon(Icons.post_add, size: 56, color: Colors.grey[300]),
+                      const SizedBox(height: 12),
+                      Text('Vous n\'avez aucune annonce',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text('Publiez votre premiere annonce!',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+
+            if (!_loading && _myAds.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) {
                       final ad = _myAds[i];
-                      return Container(
-                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
-                        ),
-                        child: ListTile(
-                          leading: Container(
-                            width: 48, height: 48,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00853F).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
+                      return GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(ctx, MaterialPageRoute(
+                            builder: (_) => AdDetailScreen(
+                              ad: ad,
+                              onFavoriteToggle: (_) {},
+                              isFavorite: false,
                             ),
-                            child: const Icon(Icons.campaign, color: Color(0xFF00853F)),
+                          ));
+                          _loadMyAds();
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
                           ),
-                          title: Text(ad['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(_formatPrice(ad['price']),
-                              style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _deleteAd(ad['id']),
+                          child: Row(
+                            children: [
+                              _buildAdImage(ad),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(ad['title'] ?? '',
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                    const SizedBox(height: 3),
+                                    Text(_formatPrice(ad['price']),
+                                        style: const TextStyle(
+                                            color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 3),
+                                    Row(children: [
+                                      Icon(Icons.location_on, size: 12, color: Colors.grey[400]),
+                                      Text(ad['city'] ?? '',
+                                          style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                                      const SizedBox(width: 8),
+                                      if (ad['category'] != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[100],
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(ad['category'],
+                                              style: TextStyle(color: Colors.grey[600], fontSize: 10)),
+                                        ),
+                                    ]),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+                                onPressed: () => _deleteAd(ad['id']),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -216,31 +330,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     childCount: _myAds.length,
                   ),
                 ),
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
-        ],
-      ),
-    );
-  }
+              ),
 
-  Widget _statCard(String label, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: const Color(0xFF00853F), size: 22),
-            const SizedBox(height: 4),
-            Text(value, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 10)),
+            // Logout button
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: OutlinedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout, color: Colors.red),
+                  label: const Text('Se deconnecter', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
           ],
         ),
       ),
     );
   }
+
+  Widget _statBox(String value, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.2),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Column(
+      children: [
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
+    ),
+  );
 }
