@@ -1,6 +1,6 @@
 name: sen_annonces
 description: Petites annonces au Senegal
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -14,6 +14,7 @@ dependencies:
   path_provider: ^2.1.2
   http: ^1.2.0
   webview_flutter: ^4.4.2
+  supabase_flutter: ^2.3.4
 
 dev_dependencies:
   flutter_test:
