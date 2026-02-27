@@ -27,7 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      final response = await Supabase.instance.client.auth.signUp(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text.trim(),
         data: {
@@ -36,7 +36,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'city': _selectedCity ?? '',
         },
       );
-      if (mounted) {
+
+      if (!mounted) return;
+
+      // Check if email confirmation is required
+      if (response.user != null && response.session == null) {
+        // Email confirmation required
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.email, color: Color(0xFF00853F)),
+                SizedBox(width: 8),
+                Text('Confirmez votre email'),
+              ],
+            ),
+            content: Text(
+              'Un email de confirmation a ete envoye a:\n\n${_emailCtrl.text.trim()}\n\nVerifiez votre boite mail et cliquez sur le lien de confirmation, puis connectez-vous.',
+              style: const TextStyle(height: 1.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context); // Go back to login
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F)),
+                child: const Text('OK, aller a la connexion', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      } else if (response.session != null) {
+        // Logged in directly (no email confirmation required)
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Compte cree avec succes!'),
             backgroundColor: Color(0xFF00853F)));
@@ -44,10 +79,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
             MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+      if (!mounted) return;
+      String errorMsg = e.toString();
+      // Make error messages user-friendly
+      if (errorMsg.contains('User already registered') || errorMsg.contains('already been registered')) {
+        errorMsg = 'Cet email est deja utilise. Essayez de vous connecter.';
+      } else if (errorMsg.contains('Password should be')) {
+        errorMsg = 'Le mot de passe doit contenir au moins 6 caracteres.';
+      } else if (errorMsg.contains('Unable to validate email') || errorMsg.contains('invalid format')) {
+        errorMsg = 'Adresse email invalide.';
+      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup')) {
+        errorMsg = 'Erreur de connexion. Verifiez votre internet.';
+      } else if (errorMsg.contains('Signup is disabled')) {
+        errorMsg = 'Les inscriptions sont desactivees. Contactez l\'administrateur.';
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red, duration: const Duration(seconds: 5)));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -86,29 +133,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Nom complet *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                TextFormField(controller: _nameCtrl, decoration: _dec('Votre nom', Icons.person_outline),
-                    validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+                const SizedBox(height: 10),
+                _label('Nom complet *'),
+                TextFormField(
+                  controller: _nameCtrl,
+                  decoration: _dec('Votre nom complet', Icons.person_outline),
+                  validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
+                ),
                 const SizedBox(height: 14),
-                const Text('Email *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                TextFormField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress,
-                    decoration: _dec('exemple@email.com', Icons.email_outlined),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Champ obligatoire';
-                      if (!v.contains('@')) return 'Email invalide';
-                      return null;
-                    }),
+                _label('Email *'),
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _dec('exemple@email.com', Icons.email_outlined),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Champ obligatoire';
+                    if (!v.contains('@') || !v.contains('.')) return 'Email invalide';
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 14),
-                const Text('Telephone *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                TextFormField(controller: _phoneCtrl, keyboardType: TextInputType.phone,
-                    decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
-                    validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null),
+                _label('Telephone *'),
+                TextFormField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
+                  validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
+                ),
                 const SizedBox(height: 14),
-                const Text('Ville *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                _label('Ville *'),
                 DropdownButtonFormField<String>(
                   value: _selectedCity,
                   hint: const Text('Selectionnez votre ville'),
@@ -118,10 +171,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: (v) => v == null ? 'Selectionnez une ville' : null,
                 ),
                 const SizedBox(height: 14),
-                const Text('Mot de passe *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                _label('Mot de passe *'),
                 TextFormField(
-                  controller: _passCtrl, obscureText: _obscure,
+                  controller: _passCtrl,
+                  obscureText: _obscure,
                   decoration: _dec('Min. 6 caracteres', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
@@ -135,14 +188,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 14),
-                const Text('Confirmer mot de passe *', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                _label('Confirmer mot de passe *'),
                 TextFormField(
-                  controller: _pass2Ctrl, obscureText: _obscure,
+                  controller: _pass2Ctrl,
+                  obscureText: _obscure,
                   decoration: _dec('Repetez le mot de passe', Icons.lock_outline),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Champ obligatoire';
-                    if (v != _passCtrl.text) return 'Mots de passe differents';
+                    if (v != _passCtrl.text) return 'Les mots de passe ne correspondent pas';
                     return null;
                   },
                 ),
@@ -151,14 +204,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   width: double.infinity, height: 52,
                   child: ElevatedButton(
                     onPressed: _loading ? null : _register,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00853F),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
                     child: _loading
                         ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                         : const Text("S'inscrire",
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -166,4 +222,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
+
+  Widget _label(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
 }
