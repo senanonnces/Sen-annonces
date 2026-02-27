@@ -57,14 +57,14 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
   }
 
   Future<void> _contactWhatsApp() async {
-    final phone = (widget.ad['phone'] ?? '').replaceAll(RegExp(r'[^0-9+]'), '');
+    final phone = (widget.ad['contact_phone'] ?? widget.ad['contact_whatsapp'] ?? '').replaceAll(RegExp(r'[^0-9+]'), '');
     final title = Uri.encodeComponent(widget.ad['title'] ?? '');
     final url = Uri.parse('https://wa.me/$phone?text=Bonjour, je suis interesse par votre annonce: $title');
     if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _callSeller() async {
-    final phone = widget.ad['phone'] ?? '';
+    final phone = widget.ad['contact_phone'] ?? widget.ad['contact_whatsapp'] ?? '';
     final url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) await launchUrl(url);
   }
