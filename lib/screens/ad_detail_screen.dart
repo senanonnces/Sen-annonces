@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 class AdDetailScreen extends StatefulWidget {
   final Map<String, dynamic> ad;
@@ -13,6 +13,7 @@ class AdDetailScreen extends StatefulWidget {
 
 class _AdDetailScreenState extends State<AdDetailScreen> {
   late bool _isFav;
+  int _currentImageIndex = 0;
 
   @override
   void initState() {
@@ -39,55 +40,90 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     } catch (_) { return ''; }
   }
 
-  void _showContact(bool isCall) {
+  Future<void> _launchCall(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('tel:$clean');
+    try {
+      await launchUrl(uri);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Impossible d\'appeler: $phone')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse('https://wa.me/$clean');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp non disponible')),
+        );
+      }
+    }
+  }
+
+  void _showContact() {
     final phone = widget.ad['phone'] ?? widget.ad['seller_phone'] ?? 'Non disponible';
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: const Color(0xFF00853F),
-              child: Icon(isCall ? Icons.phone : Icons.message, color: Colors.white, size: 28),
-            ),
-            const SizedBox(height: 12),
-            Text(isCall ? 'Appeler le vendeur' : 'Contacter le vendeur',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            Text(widget.ad['seller_name'] ?? 'Vendeur',
-                style: TextStyle(color: Colors.grey[600])),
-            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00853F).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.phone, color: Color(0xFF00853F)),
-                  const SizedBox(width: 8),
-                  Text(phone, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                ],
-              ),
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00853F),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: const Color(0xFF00853F).withOpacity(0.1),
+              child: const Icon(Icons.person, color: Color(0xFF00853F), size: 32),
+            ),
+            const SizedBox(height: 12),
+            Text(widget.ad['seller_name'] ?? 'Vendeur',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 4),
+            Text(phone,
+                style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 20)),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () { Navigator.pop(context); _launchCall(phone); },
+                    icon: const Icon(Icons.phone, color: Colors.white),
+                    label: const Text('Appeler', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00853F),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
                 ),
-                child: const Text('Fermer', style: TextStyle(color: Colors.white, fontSize: 16)),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () { Navigator.pop(context); _launchWhatsApp(phone); },
+                    icon: const Icon(Icons.message, color: Colors.white),
+                    label: const Text('WhatsApp', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
           ],
@@ -96,15 +132,101 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     );
   }
 
+  List<String> get _imagePaths {
+    final paths = widget.ad['image_paths'];
+    if (paths == null || paths is! List) return [];
+    return paths.map((e) => e.toString()).where((p) => p.isNotEmpty).toList();
+  }
+
+  Widget _buildImageSlider() {
+    final paths = _imagePaths;
+    if (paths.isEmpty) {
+      return Container(
+        height: 250,
+        color: Colors.grey[100],
+        child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+      );
+    }
+
+    return SizedBox(
+      height: 280,
+      child: Stack(
+        children: [
+          PageView.builder(
+            itemCount: paths.length,
+            onPageChanged: (i) => setState(() => _currentImageIndex = i),
+            itemBuilder: (_, i) {
+              final file = File(paths[i]);
+              return FutureBuilder<bool>(
+                future: file.exists(),
+                builder: (ctx, snap) {
+                  if (snap.data == true) {
+                    return Image.file(file, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                        ));
+                  }
+                  return Container(
+                    color: Colors.grey[100],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        Text('Photo non disponible', style: TextStyle(color: Colors.grey[500])),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          if (paths.length > 1)
+            Positioned(
+              bottom: 12,
+              left: 0, right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(paths.length, (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: _currentImageIndex == i ? 20 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _currentImageIndex == i ? const Color(0xFF00853F) : Colors.white.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                )),
+              ),
+            ),
+          if (paths.length > 1)
+            Positioned(
+              top: 12, right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('${_currentImageIndex + 1}/${paths.length}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ad = widget.ad;
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 220,
+            expandedHeight: 280,
             pinned: true,
             backgroundColor: const Color(0xFF00853F),
             leading: IconButton(
@@ -113,7 +235,10 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
             ),
             actions: [
               IconButton(
-                icon: Icon(_isFav ? Icons.favorite : Icons.favorite_border, color: Colors.white),
+                icon: Icon(
+                  _isFav ? Icons.favorite : Icons.favorite_border,
+                  color: _isFav ? Colors.red : Colors.white,
+                ),
                 onPressed: () {
                   setState(() => _isFav = !_isFav);
                   widget.onFavoriteToggle(ad['id']);
@@ -121,146 +246,113 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF00853F), Color(0xFF004D25)],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  ),
-                ),
-                child: const Center(
-                  child: Icon(Icons.campaign, size: 80, color: Colors.white54),
-                ),
-              ),
+              background: _buildImageSlider(),
             ),
           ),
           SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Main info card
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Price + favorite
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00853F).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(ad['category'] ?? '',
-                                style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.w600, fontSize: 12)),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.location_on, size: 14, color: Colors.grey),
-                          Text(ad['city'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                          const Spacer(),
-                          Text(_timeAgo(ad['created_at']), style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_formatPrice(ad['price']),
+                                style: const TextStyle(
+                                    color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 26)),
+                            const SizedBox(height: 4),
+                            Text(ad['title'] ?? '',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(ad['title'] ?? '',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text(_formatPrice(ad['price']),
-                          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00853F))),
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                // Description
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 12),
+                  // Meta info
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
                     children: [
-                      const Text('Description', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text(ad['description'] ?? 'Aucune description disponible.',
-                          style: const TextStyle(color: Colors.black87, height: 1.6, fontSize: 14)),
+                      _chip(Icons.location_on, ad['city'] ?? '', Colors.blue),
+                      if (ad['category'] != null)
+                        _chip(Icons.category, ad['category'] ?? '', Colors.purple),
+                      _chip(Icons.access_time, _timeAgo(ad['created_at']), Colors.grey),
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                // Seller info
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Vendeur', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: const Color(0xFF00853F),
-                            child: Text(
-                              (ad['seller_name'] ?? 'V').substring(0, 1).toUpperCase(),
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  // Description
+                  const Text('Description',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text(ad['description'] ?? '',
+                      style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 14)),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  // Seller info
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: const Color(0xFF00853F).withOpacity(0.15),
+                          radius: 22,
+                          child: const Icon(Icons.person, color: Color(0xFF00853F), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(ad['seller_name'] ?? 'Vendeur',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                              Row(children: [
-                                const Icon(Icons.phone, size: 13, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text(ad['phone'] ?? 'N/A', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                              ]),
+                                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text(ad['phone'] ?? '',
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                             ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        Icon(Icons.verified, color: Colors.green[400], size: 18),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 100),
-              ],
+                  const SizedBox(height: 100),
+                ],
+              ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      bottomSheet: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -3))],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
         ),
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _showContact(false),
-                icon: const Icon(Icons.message_outlined, color: Color(0xFF00853F)),
-                label: const Text('Message', style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF00853F)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => _showContact(true),
+                onPressed: _showContact,
                 icon: const Icon(Icons.phone, color: Colors.white),
-                label: const Text('Appeler', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                label: const Text('Contacter le vendeur',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00853F),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ),
@@ -269,4 +361,21 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
       ),
     );
   }
+
+  Widget _chip(IconData icon, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.2)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      ],
+    ),
+  );
 }
