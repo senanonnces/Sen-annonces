@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -19,91 +20,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _selectedCity;
 
   final List<String> _cities = [
-    'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
+    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
+    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
   ];
-
-  String _phoneToEmail(String phone) {
-    final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    return 'user_$clean@senannonces.app';
-  }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final fakeEmail = _phoneToEmail(_phoneCtrl.text.trim());
-    final password = _passCtrl.text.trim();
+    await Future.delayed(const Duration(milliseconds: 500));
 
     try {
-      final response = await Supabase.instance.client.auth.signUp(
-        email: fakeEmail,
-        password: password,
-        data: {
-          'full_name': _nameCtrl.text.trim(),
-          'phone': _phoneCtrl.text.trim(),
-          'city': _selectedCity ?? 'Dakar',
-        },
+      final prefs = await SharedPreferences.getInstance();
+      final usersJson = prefs.getString('users') ?? '[]';
+      final users = List<Map<String, dynamic>>.from(
+        (jsonDecode(usersJson) as List).map((e) => Map<String, dynamic>.from(e))
       );
 
-      if (!mounted) return;
+      final phone = _phoneCtrl.text.trim();
 
-      if (response.session != null) {
-        // Success - logged in directly
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Compte cree! Bienvenue!'),
-            backgroundColor: Color(0xFF00853F)));
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
-      } else if (response.user != null) {
-        // User created but email confirmation required
-        // Try login anyway
-        try {
-          await Supabase.instance.client.auth.signInWithPassword(
-            email: fakeEmail,
-            password: password,
-          );
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
-          }
-        } catch (_) {
-          if (mounted) {
-            _showSuccess('Compte cree! Connectez-vous avec votre telephone.');
-            Navigator.pop(context);
-          }
+      // Check if phone already registered
+      final exists = users.any((u) => u['phone'] == phone);
+      if (exists) {
+        if (mounted) {
+          _showError('Ce numero est deja enregistre. Connectez-vous.');
         }
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      final rawError = e.toString();
-
-      // Check for specific known errors only
-      if (rawError.contains('already registered') || rawError.contains('already been registered') || rawError.contains('User already')) {
-        // Try login directly
-        try {
-          await Supabase.instance.client.auth.signInWithPassword(
-            email: fakeEmail,
-            password: password,
-          );
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(context,
-                MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
-          }
-          return;
-        } catch (loginErr) {
-          _showError('Ce numero est deja enregistre. Verifiez votre mot de passe.\n\nErreur: ${loginErr.toString().replaceAll('AuthException:', '').trim()}');
-          return;
-        }
-      }
-
-      if (rawError.contains('SocketException') || rawError.contains('host lookup') || rawError.contains('Connection refused') || rawError.contains('Network is unreachable')) {
-        _showError('Pas de connexion internet. Verifiez votre Wi-Fi ou 4G.');
         return;
       }
 
-      // Show the REAL error for debugging
-      _showError('Erreur: ${rawError.replaceAll('AuthException:', '').replaceAll('Exception:', '').trim()}');
+      // Create new user
+      final newUser = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'name': _nameCtrl.text.trim(),
+        'phone': phone,
+        'password': _passCtrl.text.trim(),
+        'city': _selectedCity ?? 'Dakar',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      users.add(newUser);
+      await prefs.setString('users', jsonEncode(users));
+
+      // Auto login after register
+      await prefs.setString('current_user', jsonEncode(newUser));
+      await prefs.setBool('is_logged_in', true);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Compte cree avec succes! Bienvenue!'),
+        backgroundColor: Color(0xFF00853F),
+      ));
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) _showError('Erreur: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -111,39 +86,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _showError(String msg) {
     if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [
-          Icon(Icons.error_outline, color: Colors.red),
-          SizedBox(width: 8),
-          Text('Erreur', style: TextStyle(color: Colors.red)),
-        ]),
-        content: SelectableText(msg, style: const TextStyle(fontSize: 13)),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F)),
-            child: const Text('OK', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red, duration: const Duration(seconds: 4)),
     );
-  }
-
-  void _showSuccess(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
-        backgroundColor: const Color(0xFF00853F),
-        duration: const Duration(seconds: 4)));
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose(); _phoneCtrl.dispose();
-    _passCtrl.dispose(); _pass2Ctrl.dispose(); super.dispose();
+    _passCtrl.dispose(); _pass2Ctrl.dispose();
+    super.dispose();
   }
 
   InputDecoration _dec(String hint, IconData icon) => InputDecoration(
@@ -162,8 +114,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF00853F),
         title: const Text('Creer un compte', style: TextStyle(color: Colors.white)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -182,37 +136,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     border: Border.all(color: const Color(0xFF00853F).withOpacity(0.3)),
                   ),
                   child: const Row(children: [
-                    Icon(Icons.phone_android, color: Color(0xFF00853F), size: 20),
+                    Icon(Icons.check_circle, color: Color(0xFF00853F), size: 20),
                     SizedBox(width: 8),
                     Expanded(child: Text(
-                      'Inscription par numero de telephone',
+                      'Inscription rapide - pas besoin d\'email!',
                       style: TextStyle(color: Color(0xFF00853F), fontSize: 12, fontWeight: FontWeight.w500),
                     )),
                   ]),
                 ),
                 const SizedBox(height: 20),
-                _label('Nom complet *'),
+                _lbl('Nom complet *'),
                 TextFormField(
                   controller: _nameCtrl,
-                  decoration: _dec('Votre nom complet', Icons.person_outline),
                   textCapitalization: TextCapitalization.words,
+                  decoration: _dec('Votre nom complet', Icons.person_outline),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
                 ),
                 const SizedBox(height: 14),
-                _label('Numero de telephone *'),
+                _lbl('Numero de telephone *'),
                 TextFormField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
-                  decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
+                  decoration: _dec('Ex: 0791234567', Icons.phone_outlined),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Champ obligatoire';
-                    final clean = v.replaceAll(RegExp(r'[^0-9]'), '');
-                    if (clean.length < 8) return 'Numero invalide (minimum 8 chiffres)';
+                    if (v.replaceAll(RegExp(r'[^0-9]'), '').length < 8) return 'Numero invalide';
                     return null;
                   },
                 ),
                 const SizedBox(height: 14),
-                _label('Ville *'),
+                _lbl('Ville *'),
                 DropdownButtonFormField<String>(
                   value: _selectedCity,
                   hint: const Text('Selectionnez votre ville'),
@@ -222,7 +175,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: (v) => v == null ? 'Selectionnez une ville' : null,
                 ),
                 const SizedBox(height: 14),
-                _label('Mot de passe *'),
+                _lbl('Mot de passe *'),
                 TextFormField(
                   controller: _passCtrl,
                   obscureText: _obscure,
@@ -239,7 +192,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 14),
-                _label('Confirmer mot de passe *'),
+                _lbl('Confirmer mot de passe *'),
                 TextFormField(
                   controller: _pass2Ctrl,
                   obscureText: _obscure,
@@ -274,7 +227,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _label(String text) => Padding(
+  Widget _lbl(String t) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
+      child: Text(t, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)));
 }
