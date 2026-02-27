@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'dart:io';
+import 'boost_screen.dart';
 
 class AdDetailScreen extends StatefulWidget {
   final Map<String, dynamic> ad;
@@ -14,12 +17,36 @@ class AdDetailScreen extends StatefulWidget {
 class _AdDetailScreenState extends State<AdDetailScreen> {
   late bool _isFav;
   int _currentImageIndex = 0;
+  bool _isMyAd = false;
+  late Map<String, dynamic> _ad;
 
   @override
   void initState() {
     super.initState();
     _isFav = widget.isFavorite;
+    _ad = Map<String, dynamic>.from(widget.ad);
+    _checkIfMyAd();
   }
+
+  Future<void> _checkIfMyAd() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userJson = prefs.getString('current_user');
+    if (userJson != null) {
+      final user = jsonDecode(userJson);
+      setState(() => _isMyAd = user['id'] == _ad['user_id']);
+    }
+  }
+
+  bool get _isBoosted {
+    if (_ad['is_boosted'] != true) return false;
+    final expiry = _ad['boost_expiry'];
+    if (expiry == null) return false;
+    try {
+      return DateTime.parse(expiry).isAfter(DateTime.now());
+    } catch (_) { return false; }
+  }
+
+  String get _boostPlan => _ad['boost_plan']?.toString() ?? '';
 
   String _formatPrice(dynamic price) {
     if (price == null) return '0 FCFA';
@@ -43,10 +70,7 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
   Future<void> _launchCall(String phone) async {
     final clean = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     try { await launchUrl(Uri.parse('tel:$clean')); }
-    catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Impossible d\'appeler: $phone')));
-    }
+    catch (_) {}
   }
 
   Future<void> _launchWhatsApp(String phone) async {
@@ -54,12 +78,12 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     try { await launchUrl(Uri.parse('https://wa.me/$clean'), mode: LaunchMode.externalApplication); }
     catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WhatsApp non disponible')));
+          const SnackBar(content: Text('WhatsApp non disponible')));
     }
   }
 
   void _showContact() {
-    final phone = widget.ad['phone'] ?? widget.ad['seller_phone'] ?? 'Non disponible';
+    final phone = _ad['phone'] ?? _ad['seller_phone'] ?? 'Non disponible';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -72,9 +96,10 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
           const SizedBox(height: 20),
           CircleAvatar(radius: 32,
               backgroundColor: const Color(0xFF00853F).withOpacity(0.1),
-              child: const Icon(Icons.person, color: Color(0xFF00853F), size: 32)),
+              child: Text((_ad['seller_name']?.toString() ?? 'V').substring(0, 1).toUpperCase(),
+                  style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 24))),
           const SizedBox(height: 12),
-          Text(widget.ad['seller_name'] ?? 'Vendeur',
+          Text(_ad['seller_name'] ?? 'Vendeur',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 4),
           Text(phone, style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 20)),
@@ -108,8 +133,22 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     );
   }
 
+  Future<void> _openBoost() async {
+    final result = await Navigator.push(context,
+        MaterialPageRoute(builder: (_) => BoostScreen(ad: _ad)));
+    if (result == true) {
+      // Reload ad from SharedPreferences to get updated boost info
+      final prefs = await SharedPreferences.getInstance();
+      final adsJson = prefs.getString('ads') ?? '[]';
+      final ads = List<Map<String, dynamic>>.from(
+          (jsonDecode(adsJson) as List).map((e) => Map<String, dynamic>.from(e)));
+      final updatedAd = ads.firstWhere((a) => a['id'] == _ad['id'], orElse: () => _ad);
+      setState(() => _ad = updatedAd);
+    }
+  }
+
   List<String> get _imagePaths {
-    final paths = widget.ad['image_paths'];
+    final paths = _ad['image_paths'];
     if (paths == null || paths is! List) return [];
     return paths.map((e) => e.toString()).where((p) => p.isNotEmpty).toList();
   }
@@ -118,8 +157,7 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     final paths = _imagePaths;
     if (paths.isEmpty) {
       return Container(
-        height: 260,
-        color: Colors.grey[100],
+        height: 260, color: Colors.grey[100],
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.image_not_supported, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 8),
@@ -127,56 +165,90 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
         ]),
       );
     }
-    return SizedBox(
-      height: 280,
-      child: Stack(children: [
-        PageView.builder(
-          itemCount: paths.length,
-          onPageChanged: (i) => setState(() => _currentImageIndex = i),
-          itemBuilder: (_, i) {
-            final file = File(paths[i]);
-            return FutureBuilder<bool>(
-              future: file.exists(),
-              builder: (ctx, snap) {
-                if (snap.data == true) {
-                  return Image.file(file, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.broken_image, size: 64, color: Colors.grey)));
-                }
-                return Container(color: Colors.grey[100],
-                    child: const Icon(Icons.image_not_supported, size: 48, color: Colors.grey));
-              },
-            );
-          },
-        ),
-        if (paths.length > 1) ...[
-          Positioned(bottom: 12, left: 0, right: 0,
-              child: Row(mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(paths.length, (i) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: _currentImageIndex == i ? 20 : 8, height: 8,
-                    decoration: BoxDecoration(
-                      color: _currentImageIndex == i ? const Color(0xFF00853F) : Colors.white.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  )))),
-          Positioned(top: 12, right: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
-                child: Text('${_currentImageIndex + 1}/${paths.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
-              )),
-        ],
-      ]),
-    );
+    return SizedBox(height: 280, child: Stack(children: [
+      PageView.builder(
+        itemCount: paths.length,
+        onPageChanged: (i) => setState(() => _currentImageIndex = i),
+        itemBuilder: (_, i) {
+          final file = File(paths[i]);
+          return FutureBuilder<bool>(
+            future: file.exists(),
+            builder: (ctx, snap) {
+              if (snap.data == true) {
+                return Image.file(file, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.broken_image, size: 64, color: Colors.grey)));
+              }
+              return Container(color: Colors.grey[100],
+                  child: const Icon(Icons.image_not_supported, size: 48, color: Colors.grey));
+            },
+          );
+        },
+      ),
+      if (paths.length > 1) ...[
+        Positioned(bottom: 12, left: 0, right: 0,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(paths.length, (i) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: _currentImageIndex == i ? 20 : 8, height: 8,
+                  decoration: BoxDecoration(
+                    color: _currentImageIndex == i ? const Color(0xFF00853F) : Colors.white.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                )))),
+        Positioned(top: 12, right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+              child: Text('${_currentImageIndex + 1}/${paths.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12)),
+            )),
+      ],
+      // Boost badge on image
+      if (_isBoosted)
+        Positioned(top: 12, left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _boostBadgeColor(),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6)],
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(_boostEmoji(), style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 4),
+                Text(_boostLabel(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              ]),
+            )),
+    ]));
   }
 
-  // ===== CATEGORY SPECIFIC INFO WIDGET =====
+  Color _boostBadgeColor() {
+    switch (_boostPlan) {
+      case 'premium': return const Color(0xFFE65100);
+      case 'standard': return const Color(0xFF1565C0);
+      default: return const Color(0xFF795548);
+    }
+  }
+  String _boostEmoji() {
+    switch (_boostPlan) {
+      case 'premium': return '🥇';
+      case 'standard': return '🥈';
+      default: return '🥉';
+    }
+  }
+  String _boostLabel() {
+    switch (_boostPlan) {
+      case 'premium': return 'PREMIUM';
+      case 'standard': return 'STANDARD';
+      default: return 'BOOST';
+    }
+  }
+
   Widget? _buildCategoryInfo() {
-    final ad = widget.ad;
+    final ad = _ad;
     switch (ad['category']) {
       case 'Voitures':
         final items = <Map<String,String>>[];
@@ -192,7 +264,6 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
           items.add({'icon': '⭐', 'label': 'État', 'value': ad['car_condition']});
         if (items.isEmpty) return null;
         return _infoCard(Icons.directions_car, const Color(0xFF1565C0), 'Détails du véhicule', items);
-
       case 'Immobilier':
         final items = <Map<String,String>>[];
         if (ad['prop_type'] != null && ad['prop_type'].toString().isNotEmpty)
@@ -205,7 +276,6 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
           items.add({'icon': '🚪', 'label': 'Pièces', 'value': ad['prop_rooms']});
         if (items.isEmpty) return null;
         return _infoCard(Icons.home, const Color(0xFF6A1B9A), 'Détails du bien', items);
-
       case 'Electronique':
         final items = <Map<String,String>>[];
         if (ad['tech_brand'] != null && ad['tech_brand'].toString().isNotEmpty)
@@ -213,8 +283,7 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
         if (ad['tech_condition'] != null && ad['tech_condition'].toString().isNotEmpty)
           items.add({'icon': '⭐', 'label': 'État', 'value': ad['tech_condition']});
         if (items.isEmpty) return null;
-        return _infoCard(Icons.phone_android, const Color(0xFF00838F), 'Détails de l\'appareil', items);
-
+        return _infoCard(Icons.phone_android, const Color(0xFF00838F), 'Détails', items);
       case 'Emploi':
         final items = <Map<String,String>>[];
         if (ad['job_type'] != null && ad['job_type'].toString().isNotEmpty)
@@ -223,9 +292,7 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
           items.add({'icon': '💰', 'label': 'Salaire', 'value': '${ad['job_salary']} FCFA'});
         if (items.isEmpty) return null;
         return _infoCard(Icons.work, const Color(0xFFE65100), 'Détails du poste', items);
-
-      default:
-        return null;
+      default: return null;
     }
   }
 
@@ -233,8 +300,7 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withOpacity(0.25)),
         boxShadow: [BoxShadow(color: color.withOpacity(0.07), blurRadius: 8)],
       ),
@@ -246,20 +312,17 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
           ),
           child: Row(children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(width: 8),
+            Icon(icon, color: color, size: 18), const SizedBox(width: 8),
             Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
           ]),
         ),
         Padding(
           padding: const EdgeInsets.all(12),
-          child: Wrap(
-            spacing: 10, runSpacing: 10,
+          child: Wrap(spacing: 10, runSpacing: 10,
             children: items.map((item) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(10),
+                color: color.withOpacity(0.06), borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: color.withOpacity(0.15)),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -278,16 +341,13 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ad = widget.ad;
     final categoryInfo = _buildCategoryInfo();
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 280,
-            pinned: true,
+            expandedHeight: 280, pinned: true,
             backgroundColor: const Color(0xFF00853F),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -295,13 +355,11 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
             ),
             actions: [
               IconButton(
-                icon: Icon(
-                  _isFav ? Icons.favorite : Icons.favorite_border,
-                  color: _isFav ? Colors.red : Colors.white,
-                ),
+                icon: Icon(_isFav ? Icons.favorite : Icons.favorite_border,
+                    color: _isFav ? Colors.red : Colors.white),
                 onPressed: () {
                   setState(() => _isFav = !_isFav);
-                  widget.onFavoriteToggle(ad['id']);
+                  widget.onFavoriteToggle(_ad['id']);
                 },
               ),
             ],
@@ -310,82 +368,125 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Price & Title
-                  Text(_formatPrice(ad['price']),
-                      style: const TextStyle(
-                          color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 26)),
-                  const SizedBox(height: 4),
-                  Text(ad['title'] ?? '',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 12),
-
-                  // Meta chips
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    _chip(Icons.location_on, ad['city'] ?? '', Colors.blue),
-                    if (ad['category'] != null)
-                      _chip(Icons.category, ad['category'] ?? '', Colors.purple),
-                    _chip(Icons.access_time, _timeAgo(ad['created_at']), Colors.grey),
-                  ]),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // Category-specific info card
-                  if (categoryInfo != null) categoryInfo,
-
-                  // Description
-                  const Text('Description',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  Text(ad['description'] ?? '',
-                      style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 14)),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // Seller info
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Boost badge (active)
+                if (_isBoosted)
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.grey.shade200),
+                      color: _boostBadgeColor().withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _boostBadgeColor().withOpacity(0.3)),
                     ),
                     child: Row(children: [
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF00853F).withOpacity(0.15),
-                        radius: 22,
-                        child: Text(
-                          (ad['seller_name']?.toString() ?? 'V').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(ad['seller_name'] ?? 'Vendeur',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(ad['phone'] ?? '',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                      ])),
-                      Icon(Icons.verified, color: Colors.green[400], size: 18),
+                      Text(_boostEmoji(), style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 8),
+                      Text('Annonce boostée — ${_boostLabel()}',
+                          style: TextStyle(color: _boostBadgeColor(), fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Text(_boostExpiry(), style: TextStyle(color: _boostBadgeColor().withOpacity(0.7), fontSize: 12)),
                     ]),
                   ),
-                  const SizedBox(height: 100),
+
+                // Price & Title
+                Text(_formatPrice(_ad['price']),
+                    style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 26)),
+                const SizedBox(height: 4),
+                Text(_ad['title'] ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  _chip(Icons.location_on, _ad['city'] ?? '', Colors.blue),
+                  if (_ad['category'] != null) _chip(Icons.category, _ad['category'] ?? '', Colors.purple),
+                  _chip(Icons.access_time, _timeAgo(_ad['created_at']), Colors.grey),
+                ]),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                if (categoryInfo != null) categoryInfo,
+
+                const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text(_ad['description'] ?? '',
+                    style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 14)),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                // Seller info
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50], borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Row(children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFF00853F).withOpacity(0.15), radius: 22,
+                      child: Text((_ad['seller_name']?.toString() ?? 'V').substring(0, 1).toUpperCase(),
+                          style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold, fontSize: 18)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(_ad['seller_name'] ?? 'Vendeur',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(_ad['phone'] ?? '',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                    ])),
+                    Icon(Icons.verified, color: Colors.green[400], size: 18),
+                  ]),
+                ),
+
+                // BOOST BUTTON (only for owner)
+                if (_isMyAd) ...[
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: _openBoost,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF8C00), Color(0xFFFFB300)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: Row(children: [
+                        const Text('🚀', style: TextStyle(fontSize: 28)),
+                        const SizedBox(width: 12),
+                        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Booster cette annonce',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text('Apparaissez en 1ère position • 10x plus de contacts',
+                              style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        ])),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text('Boost!',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ]),
+                    ),
+                  ),
                 ],
-              ),
+                const SizedBox(height: 100),
+              ]),
             ),
           ),
         ],
       ),
-      bottomSheet: Container(
+      bottomSheet: _isMyAd ? null : Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08),
-              blurRadius: 12, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
         ),
         child: ElevatedButton.icon(
           onPressed: _showContact,
@@ -402,16 +503,24 @@ class _AdDetailScreenState extends State<AdDetailScreen> {
     );
   }
 
+  String _boostExpiry() {
+    try {
+      final expiry = DateTime.parse(_ad['boost_expiry']);
+      final diff = expiry.difference(DateTime.now());
+      if (diff.inDays > 0) return 'Expire dans ${diff.inDays}j';
+      if (diff.inHours > 0) return 'Expire dans ${diff.inHours}h';
+      return 'Expire bientôt';
+    } catch (_) { return ''; }
+  }
+
   Widget _chip(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(20),
+      color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20),
       border: Border.all(color: color.withOpacity(0.2)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 14, color: color),
-      const SizedBox(width: 4),
+      Icon(icon, size: 14, color: color), const SizedBox(width: 4),
       Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
     ]),
   );
