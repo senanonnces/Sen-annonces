@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -41,6 +42,25 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadUserPhone();
+  }
+
+  // Auto-fill phone from user profile
+  Future<void> _loadUserPhone() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userJson = prefs.getString('current_user');
+    if (userJson != null) {
+      final user = jsonDecode(userJson);
+      final phone = user['phone']?.toString() ?? '';
+      if (phone.isNotEmpty && _phoneCtrl.text.isEmpty) {
+        setState(() => _phoneCtrl.text = phone);
+      }
+    }
+  }
+
   Future<void> _pickImages() async {
     try {
       final picked = await _picker.pickMultiImage(imageQuality: 70, limit: 4);
@@ -64,7 +84,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           source: ImageSource.camera, imageQuality: 70);
       if (photo != null) {
         setState(() {
-          _images.add(File(photo.path));
+          if (_images.length < 4) _images.add(File(photo.path));
         });
       }
     } catch (e) {
@@ -107,8 +127,20 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     );
   }
 
+  // Copy image to permanent app storage directory
+  Future<String> _copyImageToPermanentStorage(File tempFile, String adId, int index) async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final adsImgDir = Directory('${appDir.path}/ads_images');
+    if (!await adsImgDir.exists()) {
+      await adsImgDir.create(recursive: true);
+    }
+    final ext = tempFile.path.split('.').last.toLowerCase();
+    final newPath = '${adsImgDir.path}/${adId}_$index.$ext';
+    await tempFile.copy(newPath);
+    return newPath;
+  }
+
   Future<void> _submit() async {
-    // Validate category first
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -135,11 +167,22 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       final ads = List<Map<String, dynamic>>.from(
           (jsonDecode(adsJson) as List).map((e) => Map<String, dynamic>.from(e)));
 
-      // Convert images to base64 for local storage (max 3 images, compressed)
-      final List<String> imagePaths = _images.map((f) => f.path).toList();
+      final adId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Copy images to permanent storage
+      final List<String> permanentPaths = [];
+      for (int i = 0; i < _images.length; i++) {
+        try {
+          final permanentPath = await _copyImageToPermanentStorage(_images[i], adId, i);
+          permanentPaths.add(permanentPath);
+        } catch (e) {
+          // If copy fails, use original path as fallback
+          permanentPaths.add(_images[i].path);
+        }
+      }
 
       final newAd = {
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'id': adId,
         'title': _titleCtrl.text.trim(),
         'price': int.tryParse(_priceCtrl.text.trim()) ?? 0,
         'description': _descCtrl.text.trim(),
@@ -148,7 +191,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'city': _selectedCity ?? user?['city'] ?? 'Dakar',
         'user_id': user?['id'] ?? '',
         'seller_name': user?['name'] ?? 'Vendeur',
-        'image_paths': imagePaths,
+        'image_paths': permanentPaths,
         'created_at': DateTime.now().toIso8601String(),
         'is_active': true,
       };
@@ -168,10 +211,11 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         duration: Duration(seconds: 3),
       ));
 
-      // Reset
       _titleCtrl.clear(); _priceCtrl.clear();
-      _descCtrl.clear(); _phoneCtrl.clear();
+      _descCtrl.clear();
       setState(() { _selectedCategory = null; _selectedCity = null; _images = []; });
+      // Reload phone from user
+      _loadUserPhone();
 
       widget.onAdCreated();
     } catch (e) {
@@ -191,7 +235,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     super.dispose();
   }
 
-  InputDecoration _dec(String hint, IconData icon, {bool required = false}) => InputDecoration(
+  InputDecoration _dec(String hint, IconData icon) => InputDecoration(
     hintText: hint,
     prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
     filled: true, fillColor: const Color(0xFFF5F5F5),
@@ -290,7 +334,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 const SizedBox(height: 20),
 
                 // ===== STEP 2: PHOTOS =====
-                _stepHeader('2', 'Ajouter des photos (optionnel)'),
+                _stepHeader('2', 'Ajouter des photos (optionnel, max 4)'),
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 100,
@@ -298,29 +342,30 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                     scrollDirection: Axis.horizontal,
                     children: [
                       // Add photo button
-                      GestureDetector(
-                        onTap: _showImageSourceSheet,
-                        child: Container(
-                          width: 100, height: 100,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300, width: 1.5),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_photo_alternate,
-                                  color: Colors.grey[400], size: 32),
-                              const SizedBox(height: 4),
-                              Text('Ajouter\nphoto',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-                            ],
+                      if (_images.length < 4)
+                        GestureDetector(
+                          onTap: _showImageSourceSheet,
+                          child: Container(
+                            width: 100, height: 100,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300, width: 1.5),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate,
+                                    color: Colors.grey[400], size: 32),
+                                const SizedBox(height: 4),
+                                Text('Ajouter\nphoto',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                       // Selected images
                       ..._images.asMap().entries.map((entry) {
                         final idx = entry.key;
@@ -348,6 +393,19 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                                 ),
                               ),
                             ),
+                            if (idx == 0)
+                              Positioned(
+                                bottom: 4, left: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00853F),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text('Principal',
+                                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
                           ],
                         );
                       }).toList(),
@@ -458,11 +516,11 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           child: Center(child: Text(step, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
         ),
         const SizedBox(width: 10),
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        if (required) ...[
-          const SizedBox(width: 4),
+        Expanded(
+          child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        ),
+        if (required)
           const Text('*', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-        ],
       ],
     );
   }
