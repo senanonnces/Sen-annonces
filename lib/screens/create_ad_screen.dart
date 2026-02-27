@@ -24,22 +24,67 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   List<File> _images = [];
   final ImagePicker _picker = ImagePicker();
 
+  // ===== VOITURES fields =====
+  String? _carBrand;
+  String? _carModel;
+  String? _carYear;
+  String? _carCondition;
+  final _kmCtrl = TextEditingController();
+
+  // ===== IMMOBILIER fields =====
+  String? _propType;
+  String? _propDeal; // Vente / Location
+  final _surfaceCtrl = TextEditingController();
+  final _roomsCtrl = TextEditingController();
+
+  // ===== ELECTRONIQUE fields =====
+  String? _techCondition;
+  final _brandCtrl = TextEditingController();
+
+  // ===== EMPLOI fields =====
+  String? _jobType;
+  final _salaryCtrl = TextEditingController();
+
   final List<Map<String, dynamic>> _categories = [
-    {'name': 'Voitures', 'icon': Icons.directions_car, 'color': Color(0xFF1565C0)},
-    {'name': 'Immobilier', 'icon': Icons.home, 'color': Color(0xFF6A1B9A)},
-    {'name': 'Electronique', 'icon': Icons.phone_android, 'color': Color(0xFF00838F)},
-    {'name': 'Emploi', 'icon': Icons.work, 'color': Color(0xFFE65100)},
-    {'name': 'Mode', 'icon': Icons.checkroom, 'color': Color(0xFFC2185B)},
-    {'name': 'Maison', 'icon': Icons.chair, 'color': Color(0xFF558B2F)},
-    {'name': 'Sport', 'icon': Icons.sports_soccer, 'color': Color(0xFF1976D2)},
-    {'name': 'Animaux', 'icon': Icons.pets, 'color': Color(0xFF5D4037)},
-    {'name': 'Services', 'icon': Icons.build, 'color': Color(0xFF37474F)},
-    {'name': 'Autre', 'icon': Icons.more_horiz, 'color': Color(0xFF757575)},
+    {'name': 'Voitures',    'icon': Icons.directions_car,  'color': Color(0xFF1565C0)},
+    {'name': 'Immobilier',  'icon': Icons.home,            'color': Color(0xFF6A1B9A)},
+    {'name': 'Electronique','icon': Icons.phone_android,   'color': Color(0xFF00838F)},
+    {'name': 'Emploi',      'icon': Icons.work,            'color': Color(0xFFE65100)},
+    {'name': 'Mode',        'icon': Icons.checkroom,       'color': Color(0xFFC2185B)},
+    {'name': 'Maison',      'icon': Icons.chair,           'color': Color(0xFF558B2F)},
+    {'name': 'Sport',       'icon': Icons.sports_soccer,   'color': Color(0xFF1976D2)},
+    {'name': 'Animaux',     'icon': Icons.pets,            'color': Color(0xFF5D4037)},
+    {'name': 'Services',    'icon': Icons.build,           'color': Color(0xFF37474F)},
+    {'name': 'Autre',       'icon': Icons.more_horiz,      'color': Color(0xFF757575)},
   ];
 
   final List<String> _cities = [
-    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
-    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
+    'Dakar','Thies','Saint-Louis','Ziguinchor',
+    'Kaolack','Mbour','Touba','Diourbel','Autre',
+  ];
+
+  // Car brands
+  final List<String> _carBrands = [
+    'Toyota','Hyundai','Renault','Peugeot','Mercedes-Benz',
+    'BMW','Volkswagen','Kia','Nissan','Honda','Ford','Audi',
+    'Dacia','Citroën','Mitsubishi','Chevrolet','Autre',
+  ];
+
+  final List<String> _carConditions = [
+    'Neuf', 'Très bon état', 'Bon état', 'État moyen', 'À réviser',
+  ];
+
+  final List<String> _propTypes = [
+    'Appartement', 'Villa', 'Maison', 'Studio', 'Bureau',
+    'Terrain', 'Magasin', 'Autre',
+  ];
+
+  final List<String> _techConditions = [
+    'Neuf (sous emballage)', 'Comme neuf', 'Bon état', 'État moyen',
+  ];
+
+  final List<String> _jobTypes = [
+    'Temps plein', 'Temps partiel', 'Freelance', 'Stage', 'Autre',
   ];
 
   @override
@@ -48,7 +93,6 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     _loadUserPhone();
   }
 
-  // Auto-fill phone from user profile
   Future<void> _loadUserPhone() async {
     final prefs = await SharedPreferences.getInstance();
     final userJson = prefs.getString('current_user');
@@ -61,100 +105,113 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     }
   }
 
+  void _resetCategoryFields() {
+    _carBrand = null; _carModel = null; _carYear = null; _carCondition = null;
+    _kmCtrl.clear();
+    _propType = null; _propDeal = null;
+    _surfaceCtrl.clear(); _roomsCtrl.clear();
+    _techCondition = null; _brandCtrl.clear();
+    _jobType = null; _salaryCtrl.clear();
+  }
+
   Future<void> _pickImages() async {
     try {
       final picked = await _picker.pickMultiImage(imageQuality: 70, limit: 4);
       if (picked.isNotEmpty) {
-        setState(() {
-          _images = picked.map((x) => File(x.path)).toList();
-        });
+        setState(() => _images = picked.map((x) => File(x.path)).toList());
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
     }
   }
 
   Future<void> _pickFromCamera() async {
     try {
-      final photo = await _picker.pickImage(
-          source: ImageSource.camera, imageQuality: 70);
-      if (photo != null) {
-        setState(() {
-          if (_images.length < 4) _images.add(File(photo.path));
-        });
+      final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+      if (photo != null && _images.length < 4) {
+        setState(() => _images.add(File(photo.path)));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur camera: $e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur camera: $e'), backgroundColor: Colors.red));
     }
   }
 
   void _showImageSourceSheet() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF00853F),
-                child: Icon(Icons.photo_library, color: Colors.white),
-              ),
-              title: const Text('Choisir depuis la galerie'),
-              onTap: () { Navigator.pop(context); _pickImages(); },
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFF1565C0),
-                child: Icon(Icons.camera_alt, color: Colors.white),
-              ),
-              title: const Text('Prendre une photo'),
-              onTap: () { Navigator.pop(context); _pickFromCamera(); },
-            ),
-            const SizedBox(height: 8),
-          ],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(child: Wrap(children: [
+        ListTile(
+          leading: const CircleAvatar(backgroundColor: Color(0xFF00853F), child: Icon(Icons.photo_library, color: Colors.white)),
+          title: const Text('Choisir depuis la galerie'),
+          onTap: () { Navigator.pop(context); _pickImages(); },
         ),
-      ),
+        ListTile(
+          leading: const CircleAvatar(backgroundColor: Color(0xFF1565C0), child: Icon(Icons.camera_alt, color: Colors.white)),
+          title: const Text('Prendre une photo'),
+          onTap: () { Navigator.pop(context); _pickFromCamera(); },
+        ),
+        const SizedBox(height: 8),
+      ])),
     );
   }
 
-  // Copy image to permanent app storage directory
   Future<String> _copyImageToPermanentStorage(File tempFile, String adId, int index) async {
     final appDir = await getApplicationDocumentsDirectory();
     final adsImgDir = Directory('${appDir.path}/ads_images');
-    if (!await adsImgDir.exists()) {
-      await adsImgDir.create(recursive: true);
-    }
+    if (!await adsImgDir.exists()) await adsImgDir.create(recursive: true);
     final ext = tempFile.path.split('.').last.toLowerCase();
     final newPath = '${adsImgDir.path}/${adId}_$index.$ext';
     await tempFile.copy(newPath);
     return newPath;
   }
 
+  // Build extra fields map based on category
+  Map<String, dynamic> _getExtraFields() {
+    switch (_selectedCategory) {
+      case 'Voitures':
+        return {
+          'car_brand': _carBrand,
+          'car_model': _carModel,
+          'car_year': _carYear,
+          'car_condition': _carCondition,
+          'car_km': _kmCtrl.text.trim(),
+        };
+      case 'Immobilier':
+        return {
+          'prop_type': _propType,
+          'prop_deal': _propDeal,
+          'prop_surface': _surfaceCtrl.text.trim(),
+          'prop_rooms': _roomsCtrl.text.trim(),
+        };
+      case 'Electronique':
+        return {
+          'tech_brand': _brandCtrl.text.trim(),
+          'tech_condition': _techCondition,
+        };
+      case 'Emploi':
+        return {
+          'job_type': _jobType,
+          'job_salary': _salaryCtrl.text.trim(),
+        };
+      default:
+        return {};
+    }
+  }
+
   Future<void> _submit() async {
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(children: [
-            Icon(Icons.warning, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Veuillez choisir une categorie!'),
-          ]),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Row(children: [
+          Icon(Icons.warning, color: Colors.white), SizedBox(width: 8),
+          Text('Veuillez choisir une categorie!'),
+        ]),
+        backgroundColor: Colors.orange,
+      ));
       return;
     }
-
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
@@ -162,7 +219,6 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       final prefs = await SharedPreferences.getInstance();
       final userJson = prefs.getString('current_user');
       final user = userJson != null ? jsonDecode(userJson) : null;
-
       final adsJson = prefs.getString('ads') ?? '[]';
       final ads = List<Map<String, dynamic>>.from(
           (jsonDecode(adsJson) as List).map((e) => Map<String, dynamic>.from(e)));
@@ -173,10 +229,8 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       final List<String> permanentPaths = [];
       for (int i = 0; i < _images.length; i++) {
         try {
-          final permanentPath = await _copyImageToPermanentStorage(_images[i], adId, i);
-          permanentPaths.add(permanentPath);
-        } catch (e) {
-          // If copy fails, use original path as fallback
+          permanentPaths.add(await _copyImageToPermanentStorage(_images[i], adId, i));
+        } catch (_) {
           permanentPaths.add(_images[i].path);
         }
       }
@@ -194,35 +248,30 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'image_paths': permanentPaths,
         'created_at': DateTime.now().toIso8601String(),
         'is_active': true,
+        ..._getExtraFields(),
       };
 
       ads.insert(0, newAd);
       await prefs.setString('ads', jsonEncode(ads));
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Row(children: [
-          Icon(Icons.check_circle, color: Colors.white),
-          SizedBox(width: 8),
+          Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8),
           Text('Annonce publiee avec succes!'),
         ]),
         backgroundColor: Color(0xFF00853F),
         duration: Duration(seconds: 3),
       ));
 
-      _titleCtrl.clear(); _priceCtrl.clear();
-      _descCtrl.clear();
+      _titleCtrl.clear(); _priceCtrl.clear(); _descCtrl.clear();
       setState(() { _selectedCategory = null; _selectedCity = null; _images = []; });
-      // Reload phone from user
+      _resetCategoryFields();
       _loadUserPhone();
-
       widget.onAdCreated();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -230,8 +279,9 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   @override
   void dispose() {
-    _titleCtrl.dispose(); _priceCtrl.dispose();
-    _descCtrl.dispose(); _phoneCtrl.dispose();
+    _titleCtrl.dispose(); _priceCtrl.dispose(); _descCtrl.dispose();
+    _phoneCtrl.dispose(); _kmCtrl.dispose(); _surfaceCtrl.dispose();
+    _roomsCtrl.dispose(); _brandCtrl.dispose(); _salaryCtrl.dispose();
     super.dispose();
   }
 
@@ -247,6 +297,254 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.red, width: 2)),
   );
+
+  // ===== CATEGORY-SPECIFIC FIELDS WIDGET =====
+  Widget _buildCategoryFields() {
+    switch (_selectedCategory) {
+      case 'Voitures':
+        return _buildVoituresFields();
+      case 'Immobilier':
+        return _buildImmobilierFields();
+      case 'Electronique':
+        return _buildElectroniqueFields();
+      case 'Emploi':
+        return _buildEmploiFields();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildVoituresFields() {
+    final years = List.generate(35, (i) => (2025 - i).toString());
+    return _sectionCard(
+      icon: Icons.directions_car,
+      color: const Color(0xFF1565C0),
+      title: 'Détails du véhicule',
+      children: [
+        _fieldLabel('Marque *'),
+        DropdownButtonFormField<String>(
+          value: _carBrand,
+          hint: const Text('Ex: Toyota, Renault...'),
+          decoration: _dec('', Icons.branding_watermark),
+          items: _carBrands.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+          onChanged: (v) => setState(() => _carBrand = v),
+          validator: (v) => v == null ? 'Choisissez la marque' : null,
+        ),
+        const SizedBox(height: 12),
+        _fieldLabel('Modèle'),
+        TextFormField(
+          onChanged: (v) => _carModel = v,
+          decoration: _dec('Ex: Corolla, Clio, 208...', Icons.directions_car_outlined),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _fieldLabel('Année *'),
+            DropdownButtonFormField<String>(
+              value: _carYear,
+              hint: const Text('Année'),
+              decoration: _dec('', Icons.calendar_today),
+              items: years.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
+              onChanged: (v) => setState(() => _carYear = v),
+              validator: (v) => v == null ? 'Choisissez l\'année' : null,
+            ),
+          ])),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _fieldLabel('Kilométrage'),
+            TextFormField(
+              controller: _kmCtrl,
+              keyboardType: TextInputType.number,
+              decoration: _dec('Ex: 85000', Icons.speed),
+            ),
+          ])),
+        ]),
+        const SizedBox(height: 12),
+        _fieldLabel('État du véhicule *'),
+        DropdownButtonFormField<String>(
+          value: _carCondition,
+          hint: const Text('Choisissez l\'état'),
+          decoration: _dec('', Icons.star_outline),
+          items: _carConditions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+          onChanged: (v) => setState(() => _carCondition = v),
+          validator: (v) => v == null ? 'Choisissez l\'état' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImmobilierFields() {
+    return _sectionCard(
+      icon: Icons.home,
+      color: const Color(0xFF6A1B9A),
+      title: 'Détails du bien',
+      children: [
+        _fieldLabel('Type de bien *'),
+        DropdownButtonFormField<String>(
+          value: _propType,
+          hint: const Text('Appartement, Villa...'),
+          decoration: _dec('', Icons.home_outlined),
+          items: _propTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+          onChanged: (v) => setState(() => _propType = v),
+          validator: (v) => v == null ? 'Choisissez le type' : null,
+        ),
+        const SizedBox(height: 12),
+        _fieldLabel('Type d\'offre *'),
+        Row(children: [
+          Expanded(child: GestureDetector(
+            onTap: () => setState(() => _propDeal = 'Vente'),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: _propDeal == 'Vente' ? const Color(0xFF6A1B9A) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _propDeal == 'Vente' ? const Color(0xFF6A1B9A) : Colors.grey.shade300),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.sell, color: _propDeal == 'Vente' ? Colors.white : Colors.grey, size: 18),
+                const SizedBox(width: 6),
+                Text('Vente', style: TextStyle(
+                  color: _propDeal == 'Vente' ? Colors.white : Colors.grey[700],
+                  fontWeight: FontWeight.bold,
+                )),
+              ]),
+            ),
+          )),
+          const SizedBox(width: 12),
+          Expanded(child: GestureDetector(
+            onTap: () => setState(() => _propDeal = 'Location'),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: _propDeal == 'Location' ? const Color(0xFF6A1B9A) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _propDeal == 'Location' ? const Color(0xFF6A1B9A) : Colors.grey.shade300),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.key, color: _propDeal == 'Location' ? Colors.white : Colors.grey, size: 18),
+                const SizedBox(width: 6),
+                Text('Location', style: TextStyle(
+                  color: _propDeal == 'Location' ? Colors.white : Colors.grey[700],
+                  fontWeight: FontWeight.bold,
+                )),
+              ]),
+            ),
+          )),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _fieldLabel('Surface (m²)'),
+            TextFormField(
+              controller: _surfaceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: _dec('Ex: 80', Icons.square_foot),
+            ),
+          ])),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _fieldLabel('Nb. pièces'),
+            TextFormField(
+              controller: _roomsCtrl,
+              keyboardType: TextInputType.number,
+              decoration: _dec('Ex: 3', Icons.meeting_room),
+            ),
+          ])),
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildElectroniqueFields() {
+    return _sectionCard(
+      icon: Icons.phone_android,
+      color: const Color(0xFF00838F),
+      title: 'Détails de l\'appareil',
+      children: [
+        _fieldLabel('Marque'),
+        TextFormField(
+          controller: _brandCtrl,
+          decoration: _dec('Ex: Samsung, Apple, HP...', Icons.branding_watermark),
+        ),
+        const SizedBox(height: 12),
+        _fieldLabel('État *'),
+        DropdownButtonFormField<String>(
+          value: _techCondition,
+          hint: const Text('Choisissez l\'état'),
+          decoration: _dec('', Icons.star_outline),
+          items: _techConditions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+          onChanged: (v) => setState(() => _techCondition = v),
+          validator: (v) => v == null ? 'Choisissez l\'état' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmploiFields() {
+    return _sectionCard(
+      icon: Icons.work,
+      color: const Color(0xFFE65100),
+      title: 'Détails du poste',
+      children: [
+        _fieldLabel('Type de contrat *'),
+        DropdownButtonFormField<String>(
+          value: _jobType,
+          hint: const Text('Temps plein, Stage...'),
+          decoration: _dec('', Icons.work_outline),
+          items: _jobTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+          onChanged: (v) => setState(() => _jobType = v),
+          validator: (v) => v == null ? 'Choisissez le type' : null,
+        ),
+        const SizedBox(height: 12),
+        _fieldLabel('Salaire proposé (FCFA)'),
+        TextFormField(
+          controller: _salaryCtrl,
+          keyboardType: TextInputType.number,
+          decoration: _dec('Ex: 200000 (laisser vide si non précisé)', Icons.payments_outlined),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionCard({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+            child: Row(children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -268,23 +566,24 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
               children: [
 
                 // ===== STEP 1: CATEGORY =====
-                _stepHeader('1', 'Choisir une categorie', required: true),
+                _stepHeader('1', 'Choisir une catégorie', required: true),
                 const SizedBox(height: 10),
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 5,
-                    childAspectRatio: 0.85,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisCount: 5, childAspectRatio: 0.85,
+                    crossAxisSpacing: 8, mainAxisSpacing: 8,
                   ),
                   itemCount: _categories.length,
                   itemBuilder: (_, i) {
                     final cat = _categories[i];
                     final isSelected = _selectedCategory == cat['name'];
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cat['name']),
+                      onTap: () => setState(() {
+                        _selectedCategory = cat['name'];
+                        _resetCategoryFields();
+                      }),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
@@ -294,26 +593,21 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                             color: isSelected ? cat['color'] as Color : Colors.grey.shade200,
                             width: isSelected ? 2 : 1,
                           ),
-                          boxShadow: isSelected ? [
-                            BoxShadow(color: (cat['color'] as Color).withOpacity(0.3),
-                                blurRadius: 8, offset: const Offset(0, 3))
-                          ] : [],
+                          boxShadow: isSelected ? [BoxShadow(
+                            color: (cat['color'] as Color).withOpacity(0.3),
+                            blurRadius: 8, offset: const Offset(0, 3),
+                          )] : [],
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(cat['icon'] as IconData,
-                                color: isSelected ? Colors.white : cat['color'] as Color,
-                                size: 22),
+                                color: isSelected ? Colors.white : cat['color'] as Color, size: 22),
                             const SizedBox(height: 3),
                             Text(cat['name'] as String,
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected ? Colors.white : Colors.grey[700],
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
+                                style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
+                                    color: isSelected ? Colors.white : Colors.grey[700]),
+                                textAlign: TextAlign.center, maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
                           ],
                         ),
@@ -327,11 +621,15 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                     child: Row(children: [
                       const Icon(Icons.check_circle, color: Color(0xFF00853F), size: 16),
                       const SizedBox(width: 4),
-                      Text('Categorie: $_selectedCategory',
+                      Text('Catégorie: $_selectedCategory',
                           style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 const SizedBox(height: 20),
+
+                // ===== CATEGORY SPECIFIC FIELDS =====
+                if (_selectedCategory != null && ['Voitures','Immobilier','Electronique','Emploi'].contains(_selectedCategory))
+                  _buildCategoryFields(),
 
                 // ===== STEP 2: PHOTOS =====
                 _stepHeader('2', 'Ajouter des photos (optionnel, max 4)'),
@@ -341,7 +639,6 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
-                      // Add photo button
                       if (_images.length < 4)
                         GestureDetector(
                           onTap: _showImageSourceSheet,
@@ -356,58 +653,48 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_photo_alternate,
-                                    color: Colors.grey[400], size: 32),
+                                Icon(Icons.add_photo_alternate, color: Colors.grey[400], size: 32),
                                 const SizedBox(height: 4),
-                                Text('Ajouter\nphoto',
-                                    textAlign: TextAlign.center,
+                                Text('Ajouter\nphoto', textAlign: TextAlign.center,
                                     style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                               ],
                             ),
                           ),
                         ),
-                      // Selected images
                       ..._images.asMap().entries.map((entry) {
                         final idx = entry.key;
                         final img = entry.value;
-                        return Stack(
-                          children: [
-                            Container(
-                              width: 100, height: 100,
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                image: DecorationImage(
-                                  image: FileImage(img), fit: BoxFit.cover),
+                        return Stack(children: [
+                          Container(
+                            width: 100, height: 100,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              image: DecorationImage(image: FileImage(img), fit: BoxFit.cover),
+                            ),
+                          ),
+                          Positioned(top: 4, right: 12,
+                            child: GestureDetector(
+                              onTap: () => setState(() => _images.removeAt(idx)),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                child: const Icon(Icons.close, color: Colors.white, size: 14),
                               ),
                             ),
-                            Positioned(
-                              top: 4, right: 12,
-                              child: GestureDetector(
-                                onTap: () => setState(() => _images.removeAt(idx)),
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red, shape: BoxShape.circle),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 14),
-                                ),
-                              ),
-                            ),
-                            if (idx == 0)
-                              Positioned(
-                                bottom: 4, left: 4,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
+                          ),
+                          if (idx == 0)
+                            Positioned(bottom: 4, left: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
                                     color: const Color(0xFF00853F),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Text('Principal',
-                                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                                ),
+                                    borderRadius: BorderRadius.circular(8)),
+                                child: const Text('Principal',
+                                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                               ),
-                          ],
-                        );
+                            ),
+                        ]);
                       }).toList(),
                     ],
                   ),
@@ -415,21 +702,21 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 const SizedBox(height: 20),
 
                 // ===== STEP 3: DETAILS =====
-                _stepHeader('3', 'Details de l\'annonce'),
+                _stepHeader('3', 'Détails de l\'annonce'),
                 const SizedBox(height: 10),
                 _fieldLabel('Titre *'),
                 TextFormField(
                   controller: _titleCtrl,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: _dec('Ex: iPhone 14 Pro Max 256GB', Icons.title),
+                  decoration: _dec('Ex: Toyota Corolla 2018 automatique', Icons.title),
                   validator: (v) => v == null || v.trim().isEmpty ? 'Le titre est obligatoire' : null,
                 ),
                 const SizedBox(height: 12),
-                _fieldLabel('Prix (FCFA) *'),
+                _fieldLabel(_selectedCategory == 'Emploi' ? 'Salaire (FCFA) *' : 'Prix (FCFA) *'),
                 TextFormField(
                   controller: _priceCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: _dec('Ex: 150000', Icons.payments_outlined),
+                  decoration: _dec('Ex: 3500000', Icons.payments_outlined),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Le prix est obligatoire';
                     if (int.tryParse(v.trim()) == null) return 'Entrez un prix valide';
@@ -440,9 +727,8 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 _fieldLabel('Description *'),
                 TextFormField(
                   controller: _descCtrl,
-                  maxLines: 4,
-                  maxLength: 500,
-                  decoration: _dec('Decrivez votre article: etat, caracteristiques...', Icons.description_outlined),
+                  maxLines: 4, maxLength: 500,
+                  decoration: _dec('Decrivez votre annonce...', Icons.description_outlined),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'La description est obligatoire';
                     if (v.trim().length < 10) return 'Description trop courte (min 10 caracteres)';
@@ -450,14 +736,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                _fieldLabel('Telephone de contact *'),
+                _fieldLabel('Téléphone de contact *'),
                 TextFormField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
                   decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Le telephone est obligatoire';
-                    if (v.replaceAll(RegExp(r'[^0-9]'), '').length < 8) return 'Numero invalide';
+                    if (v == null || v.trim().isEmpty) return 'Le téléphone est obligatoire';
+                    if (v.replaceAll(RegExp(r'[^0-9]'), '').length < 8) return 'Numéro invalide';
                     return null;
                   },
                 ),
@@ -465,11 +751,11 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 _fieldLabel('Ville *'),
                 DropdownButtonFormField<String>(
                   value: _selectedCity,
-                  hint: const Text('Selectionnez votre ville'),
+                  hint: const Text('Sélectionnez votre ville'),
                   decoration: _dec('', Icons.location_on_outlined),
                   items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (v) => setState(() => _selectedCity = v),
-                  validator: (v) => v == null ? 'Selectionnez une ville' : null,
+                  validator: (v) => v == null ? 'Sélectionnez une ville' : null,
                 ),
                 const SizedBox(height: 28),
 
@@ -508,21 +794,17 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   }
 
   Widget _stepHeader(String step, String title, {bool required = false}) {
-    return Row(
-      children: [
-        Container(
-          width: 28, height: 28,
-          decoration: const BoxDecoration(color: Color(0xFF00853F), shape: BoxShape.circle),
-          child: Center(child: Text(step, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-        ),
-        if (required)
-          const Text('*', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-      ],
-    );
+    return Row(children: [
+      Container(
+        width: 28, height: 28,
+        decoration: const BoxDecoration(color: Color(0xFF00853F), shape: BoxShape.circle),
+        child: Center(child: Text(step,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
+      ),
+      const SizedBox(width: 10),
+      Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+      if (required) const Text('*', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+    ]);
   }
 
   Widget _fieldLabel(String text) => Padding(
