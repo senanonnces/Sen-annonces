@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/splash_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://vabxvawpmoiwjigrczzj.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhYnh2YXdwbW9pd2ppZ3JjenpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5OTI2MzcsImV4cCI6MjA4NzU2ODYzN30.dz5V-SSusg3w9KCxbDoBidMgtA3f_gHlT18fFnOWmoc',
+  );
   runApp(const SenAnnoncesApp());
 }
+
+final supabase = Supabase.instance.client;
 
 class SenAnnoncesApp extends StatelessWidget {
   const SenAnnoncesApp({super.key});
