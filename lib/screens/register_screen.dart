@@ -11,7 +11,6 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _pass2Ctrl = TextEditingController();
@@ -23,76 +22,92 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'Dakar','Thies','Saint-Louis','Ziguinchor','Kaolack','Mbour','Touba','Diourbel','Autre',
   ];
 
+  // Generate a fake unique email from phone number to bypass email confirmation
+  String _phoneToEmail(String phone) {
+    final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    return 'user_$clean@senannonces.app';
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+
+    final fakeEmail = _phoneToEmail(_phoneCtrl.text.trim());
+    final password = _passCtrl.text.trim();
+
     try {
+      // Try to sign up first
       final response = await Supabase.instance.client.auth.signUp(
-        email: _emailCtrl.text.trim(),
-        password: _passCtrl.text.trim(),
+        email: fakeEmail,
+        password: password,
         data: {
           'full_name': _nameCtrl.text.trim(),
           'phone': _phoneCtrl.text.trim(),
-          'city': _selectedCity ?? '',
+          'city': _selectedCity ?? 'Dakar',
+          'display_name': _nameCtrl.text.trim(),
         },
       );
 
       if (!mounted) return;
 
-      // Check if email confirmation is required
-      if (response.user != null && response.session == null) {
-        // Email confirmation required
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Row(
-              children: [
-                Icon(Icons.email, color: Color(0xFF00853F)),
-                SizedBox(width: 8),
-                Text('Confirmez votre email'),
-              ],
-            ),
-            content: Text(
-              'Un email de confirmation a ete envoye a:\n\n${_emailCtrl.text.trim()}\n\nVerifiez votre boite mail et cliquez sur le lien de confirmation, puis connectez-vous.',
-              style: const TextStyle(height: 1.5),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context); // Go back to login
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F)),
-                child: const Text('OK, aller a la connexion', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        );
-      } else if (response.session != null) {
-        // Logged in directly (no email confirmation required)
+      if (response.session != null) {
+        // Logged in directly - success!
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Compte cree avec succes!'),
+            content: Text('Compte cree avec succes! Bienvenue!'),
             backgroundColor: Color(0xFF00853F)));
         Navigator.pushAndRemoveUntil(context,
             MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
+      } else {
+        // Email confirmation required - try sign in instead
+        // (user may already be registered)
+        try {
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: fakeEmail,
+            password: password,
+          );
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Compte cree! Connectez-vous maintenant avec votre telephone et mot de passe.'),
+              backgroundColor: Color(0xFF00853F),
+              duration: Duration(seconds: 4),
+            ));
+            Navigator.pop(context);
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
       String errorMsg = e.toString();
-      // Make error messages user-friendly
-      if (errorMsg.contains('User already registered') || errorMsg.contains('already been registered')) {
-        errorMsg = 'Cet email est deja utilise. Essayez de vous connecter.';
-      } else if (errorMsg.contains('Password should be')) {
-        errorMsg = 'Le mot de passe doit contenir au moins 6 caracteres.';
-      } else if (errorMsg.contains('Unable to validate email') || errorMsg.contains('invalid format')) {
-        errorMsg = 'Adresse email invalide.';
-      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup')) {
-        errorMsg = 'Erreur de connexion. Verifiez votre internet.';
-      } else if (errorMsg.contains('Signup is disabled')) {
-        errorMsg = 'Les inscriptions sont desactivees. Contactez l\'administrateur.';
+
+      if (errorMsg.contains('already registered') || errorMsg.contains('already been registered')) {
+        // Account exists - try to login directly
+        try {
+          await Supabase.instance.client.auth.signInWithPassword(
+            email: fakeEmail,
+            password: password,
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Connexion reussie!'),
+                backgroundColor: Color(0xFF00853F)));
+            Navigator.pushAndRemoveUntil(context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()), (r) => false);
+          }
+          return;
+        } catch (loginErr) {
+          errorMsg = 'Ce numero est deja enregistre. Verifiez votre mot de passe.';
+        }
+      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup') || errorMsg.contains('Failed')) {
+        errorMsg = 'Erreur de connexion internet. Verifiez votre connexion et reessayez.';
+      } else if (errorMsg.contains('Password should be') || errorMsg.contains('weak_password')) {
+        errorMsg = 'Mot de passe trop faible. Utilisez au moins 6 caracteres.';
       }
+
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(errorMsg), backgroundColor: Colors.red, duration: const Duration(seconds: 5)));
     } finally {
@@ -102,7 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _emailCtrl.dispose(); _phoneCtrl.dispose();
+    _nameCtrl.dispose(); _phoneCtrl.dispose();
     _passCtrl.dispose(); _pass2Ctrl.dispose(); super.dispose();
   }
 
@@ -134,31 +149,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 10),
+                // Info banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00853F).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF00853F).withOpacity(0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.phone_android, color: Color(0xFF00853F), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Inscription par numero de telephone - pas besoin d\'email!',
+                          style: TextStyle(color: Color(0xFF00853F), fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
                 _label('Nom complet *'),
                 TextFormField(
                   controller: _nameCtrl,
                   decoration: _dec('Votre nom complet', Icons.person_outline),
-                  validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
+                  textCapitalization: TextCapitalization.words,
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
                 ),
                 const SizedBox(height: 14),
-                _label('Email *'),
-                TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: _dec('exemple@email.com', Icons.email_outlined),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Champ obligatoire';
-                    if (!v.contains('@') || !v.contains('.')) return 'Email invalide';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                _label('Telephone *'),
+                _label('Numero de telephone *'),
                 TextFormField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
                   decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
-                  validator: (v) => v == null || v.isEmpty ? 'Champ obligatoire' : null,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Champ obligatoire';
+                    final clean = v.replaceAll(RegExp(r'[^0-9]'), '');
+                    if (clean.length < 8) return 'Numero invalide (minimum 8 chiffres)';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 14),
                 _label('Ville *'),
