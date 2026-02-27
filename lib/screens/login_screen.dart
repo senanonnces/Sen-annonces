@@ -11,17 +11,24 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _loading = false;
   bool _obscure = true;
+
+  // Same phone-to-email conversion as register
+  String _phoneToEmail(String phone) {
+    final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    return 'user_$clean@senannonces.app';
+  }
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
+      final email = _phoneToEmail(_phoneCtrl.text.trim());
       await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailCtrl.text.trim(),
+        email: email,
         password: _passCtrl.text.trim(),
       );
       if (mounted) {
@@ -32,11 +39,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       String errorMsg = e.toString();
       if (errorMsg.contains('Invalid login credentials') || errorMsg.contains('invalid_credentials')) {
-        errorMsg = 'Email ou mot de passe incorrect.';
+        errorMsg = 'Numero ou mot de passe incorrect.';
       } else if (errorMsg.contains('Email not confirmed')) {
-        errorMsg = 'Verifiez votre email et confirmez votre compte avant de vous connecter.';
-      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup')) {
-        errorMsg = 'Erreur de connexion. Verifiez votre internet.';
+        errorMsg = 'Compte non confirme. Contactez le support.';
+      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup') || errorMsg.contains('Failed')) {
+        errorMsg = 'Erreur de connexion internet. Verifiez votre connexion.';
       } else if (errorMsg.contains('Too many requests')) {
         errorMsg = 'Trop de tentatives. Attendez quelques minutes.';
       }
@@ -50,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -82,25 +89,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Center(child: Text('Sen Annonces',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF00853F)))),
                 const SizedBox(height: 6),
-                const Center(child: Text('Connectez-vous a votre compte',
+                const Center(child: Text('Connectez-vous avec votre telephone',
                     style: TextStyle(fontSize: 14, color: Colors.grey))),
                 const SizedBox(height: 40),
-                const Text('Email', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Numero de telephone', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    hintText: 'exemple@email.com',
-                    prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF00853F)),
+                    hintText: '+221 77 XXX XX XX',
+                    prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFF00853F)),
                     filled: true, fillColor: const Color(0xFFF5F5F5),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Champ obligatoire';
-                    if (!v.contains('@')) return 'Email invalide';
+                    if (v == null || v.trim().isEmpty) return 'Champ obligatoire';
+                    final clean = v.replaceAll(RegExp(r'[^0-9]'), '');
+                    if (clean.length < 8) return 'Numero invalide';
                     return null;
                   },
                 ),
@@ -111,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passCtrl,
                   obscureText: _obscure,
                   decoration: InputDecoration(
-                    hintText: 'Min. 6 caracteres',
+                    hintText: 'Votre mot de passe',
                     prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF00853F)),
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
