@@ -202,8 +202,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             child: const Icon(Icons.campaign, color: Color(0xFF00853F)),
                           ),
-                          title: Text(ad['title'] ?? '', fontWeight: FontWeight.w600,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          title: Text(ad['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
                           subtitle: Text(_formatPrice(ad['price']),
                               style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
                           trailing: IconButton(
