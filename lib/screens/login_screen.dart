@@ -16,7 +16,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   bool _obscure = true;
 
-  // Same phone-to-email conversion as register
   String _phoneToEmail(String phone) {
     final clean = phone.replaceAll(RegExp(r'[^0-9]'), '');
     return 'user_$clean@senannonces.app';
@@ -37,18 +36,40 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      String errorMsg = e.toString();
-      if (errorMsg.contains('Invalid login credentials') || errorMsg.contains('invalid_credentials')) {
+      final rawError = e.toString();
+
+      String errorMsg;
+      if (rawError.contains('Invalid login credentials') || rawError.contains('invalid_credentials')) {
         errorMsg = 'Numero ou mot de passe incorrect.';
-      } else if (errorMsg.contains('Email not confirmed')) {
-        errorMsg = 'Compte non confirme. Contactez le support.';
-      } else if (errorMsg.contains('network') || errorMsg.contains('SocketException') || errorMsg.contains('host lookup') || errorMsg.contains('Failed')) {
-        errorMsg = 'Erreur de connexion internet. Verifiez votre connexion.';
-      } else if (errorMsg.contains('Too many requests')) {
+      } else if (rawError.contains('Email not confirmed')) {
+        errorMsg = 'Compte non confirme.';
+      } else if (rawError.contains('SocketException') || rawError.contains('host lookup') || rawError.contains('Connection refused') || rawError.contains('Network is unreachable')) {
+        errorMsg = 'Pas de connexion internet.';
+      } else if (rawError.contains('Too many requests')) {
         errorMsg = 'Trop de tentatives. Attendez quelques minutes.';
+      } else {
+        // Show real error for debugging
+        errorMsg = rawError.replaceAll('AuthException:', '').replaceAll('Exception:', '').trim();
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMsg), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(children: [
+            Icon(Icons.error_outline, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Erreur connexion'),
+          ]),
+          content: SelectableText(errorMsg, style: const TextStyle(fontSize: 13)),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00853F)),
+              child: const Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -157,7 +178,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Text('Pas encore de compte? ', style: TextStyle(color: Colors.grey)),
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                      onTap: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => const RegisterScreen())),
                       child: const Text("S'inscrire",
                           style: TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.bold)),
                     ),
