@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import '../main.dart';
 
 class CreateAdScreen extends StatefulWidget {
   final VoidCallback onAdCreated;
-  const CreateAdScreen({super.key, required this.onAdCreated});
+  final Map<String, dynamic>? currentUser;
+  const CreateAdScreen({super.key, required this.onAdCreated, this.currentUser});
   @override
   State<CreateAdScreen> createState() => _CreateAdScreenState();
 }
@@ -24,790 +26,362 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   List<File> _images = [];
   final ImagePicker _picker = ImagePicker();
 
-  // ===== VOITURES fields =====
-  String? _carBrand;
-  String? _carModel;
-  String? _carYear;
-  String? _carCondition;
+  // Car fields
+  String? _carBrand, _carModel, _carYear, _carCondition;
   final _kmCtrl = TextEditingController();
 
-  // ===== IMMOBILIER fields =====
-  String? _propType;
-  String? _propDeal; // Vente / Location
+  // Real estate fields
+  String? _propType, _propDeal;
   final _surfaceCtrl = TextEditingController();
   final _roomsCtrl = TextEditingController();
 
-  // ===== ELECTRONIQUE fields =====
+  // Electronics fields
   String? _techCondition;
   final _brandCtrl = TextEditingController();
 
-  // ===== EMPLOI fields =====
+  // Employment fields
   String? _jobType;
   final _salaryCtrl = TextEditingController();
 
   final List<Map<String, dynamic>> _categories = [
-    {'name': 'Voitures',    'icon': Icons.directions_car,  'color': Color(0xFF1565C0)},
-    {'name': 'Immobilier',  'icon': Icons.home,            'color': Color(0xFF6A1B9A)},
-    {'name': 'Electronique','icon': Icons.phone_android,   'color': Color(0xFF00838F)},
-    {'name': 'Emploi',      'icon': Icons.work,            'color': Color(0xFFE65100)},
-    {'name': 'Mode',        'icon': Icons.checkroom,       'color': Color(0xFFC2185B)},
-    {'name': 'Maison',      'icon': Icons.chair,           'color': Color(0xFF558B2F)},
-    {'name': 'Sport',       'icon': Icons.sports_soccer,   'color': Color(0xFF1976D2)},
-    {'name': 'Animaux',     'icon': Icons.pets,            'color': Color(0xFF5D4037)},
-    {'name': 'Services',    'icon': Icons.build,           'color': Color(0xFF37474F)},
-    {'name': 'Autre',       'icon': Icons.more_horiz,      'color': Color(0xFF757575)},
+    {'name': 'Voitures', 'icon': Icons.directions_car, 'color': Color(0xFF1565C0)},
+    {'name': 'Immobilier', 'icon': Icons.home, 'color': Color(0xFF6A1B9A)},
+    {'name': 'Electronique', 'icon': Icons.phone_android, 'color': Color(0xFF00838F)},
+    {'name': 'Emploi', 'icon': Icons.work, 'color': Color(0xFFE65100)},
+    {'name': 'Mode', 'icon': Icons.checkroom, 'color': Color(0xFFC2185B)},
+    {'name': 'Maison', 'icon': Icons.chair, 'color': Color(0xFF558B2F)},
+    {'name': 'Sport', 'icon': Icons.sports_soccer, 'color': Color(0xFF1976D2)},
+    {'name': 'Animaux', 'icon': Icons.pets, 'color': Color(0xFF5D4037)},
+    {'name': 'Services', 'icon': Icons.build, 'color': Color(0xFF37474F)},
+    {'name': 'Autre', 'icon': Icons.more_horiz, 'color': Color(0xFF757575)},
   ];
 
   final List<String> _cities = [
-    'Dakar','Thies','Saint-Louis','Ziguinchor',
-    'Kaolack','Mbour','Touba','Diourbel','Autre',
-  ];
-
-  // Car brands
-  final List<String> _carBrands = [
-    'Toyota','Hyundai','Renault','Peugeot','Mercedes-Benz',
-    'BMW','Volkswagen','Kia','Nissan','Honda','Ford','Audi',
-    'Dacia','Citroën','Mitsubishi','Chevrolet','Autre',
-  ];
-
-  final List<String> _carConditions = [
-    'Neuf', 'Très bon état', 'Bon état', 'État moyen', 'À réviser',
-  ];
-
-  final List<String> _propTypes = [
-    'Appartement', 'Villa', 'Maison', 'Studio', 'Bureau',
-    'Terrain', 'Magasin', 'Autre',
-  ];
-
-  final List<String> _techConditions = [
-    'Neuf (sous emballage)', 'Comme neuf', 'Bon état', 'État moyen',
-  ];
-
-  final List<String> _jobTypes = [
-    'Temps plein', 'Temps partiel', 'Freelance', 'Stage', 'Autre',
+    'Dakar', 'Thies', 'Saint-Louis', 'Ziguinchor',
+    'Kaolack', 'Mbour', 'Touba', 'Diourbel', 'Autre',
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadUserPhone();
-  }
-
-  Future<void> _loadUserPhone() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJson = prefs.getString('current_user');
-    if (userJson != null) {
-      final user = jsonDecode(userJson);
-      final phone = user['phone']?.toString() ?? '';
-      if (phone.isNotEmpty && _phoneCtrl.text.isEmpty) {
-        setState(() => _phoneCtrl.text = phone);
-      }
+    if (widget.currentUser != null) {
+      _phoneCtrl.text = widget.currentUser!['phone'] ?? '';
     }
-  }
-
-  void _resetCategoryFields() {
-    _carBrand = null; _carModel = null; _carYear = null; _carCondition = null;
-    _kmCtrl.clear();
-    _propType = null; _propDeal = null;
-    _surfaceCtrl.clear(); _roomsCtrl.clear();
-    _techCondition = null; _brandCtrl.clear();
-    _jobType = null; _salaryCtrl.clear();
   }
 
   Future<void> _pickImages() async {
-    try {
-      final picked = await _picker.pickMultiImage(imageQuality: 70, limit: 4);
-      if (picked.isNotEmpty) {
-        setState(() => _images = picked.map((x) => File(x.path)).toList());
+    final picked = await _picker.pickMultiImage(imageQuality: 70);
+    if (picked.isNotEmpty) {
+      setState(() => _images = picked.map((x) => File(x.path)).toList());
+    }
+  }
+
+  Future<List<String>> _uploadImages() async {
+    List<String> urls = [];
+    for (int i = 0; i < _images.length; i++) {
+      try {
+        final bytes = await _images[i].readAsBytes();
+        final fileName = 'ad_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        await supabase.storage.from('listings').uploadBinary(
+          fileName, bytes,
+          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+        );
+        final url = supabase.storage.from('listings').getPublicUrl(fileName);
+        urls.add(url);
+      } catch (e) {
+        // skip failed image
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
     }
+    return urls;
   }
 
-  Future<void> _pickFromCamera() async {
-    try {
-      final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-      if (photo != null && _images.length < 4) {
-        setState(() => _images.add(File(photo.path)));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur camera: $e'), backgroundColor: Colors.red));
-    }
-  }
-
-  void _showImageSourceSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(child: Wrap(children: [
-        ListTile(
-          leading: const CircleAvatar(backgroundColor: Color(0xFF00853F), child: Icon(Icons.photo_library, color: Colors.white)),
-          title: const Text('Choisir depuis la galerie'),
-          onTap: () { Navigator.pop(context); _pickImages(); },
-        ),
-        ListTile(
-          leading: const CircleAvatar(backgroundColor: Color(0xFF1565C0), child: Icon(Icons.camera_alt, color: Colors.white)),
-          title: const Text('Prendre une photo'),
-          onTap: () { Navigator.pop(context); _pickFromCamera(); },
-        ),
-        const SizedBox(height: 8),
-      ])),
-    );
-  }
-
-  Future<String> _copyImageToPermanentStorage(File tempFile, String adId, int index) async {
-    final appDir = await getApplicationDocumentsDirectory();
-    final adsImgDir = Directory('${appDir.path}/ads_images');
-    if (!await adsImgDir.exists()) await adsImgDir.create(recursive: true);
-    final ext = tempFile.path.split('.').last.toLowerCase();
-    final newPath = '${adsImgDir.path}/${adId}_$index.$ext';
-    await tempFile.copy(newPath);
-    return newPath;
-  }
-
-  // Build extra fields map based on category
-  Map<String, dynamic> _getExtraFields() {
-    switch (_selectedCategory) {
-      case 'Voitures':
-        return {
-          'car_brand': _carBrand,
-          'car_model': _carModel,
-          'car_year': _carYear,
-          'car_condition': _carCondition,
-          'car_km': _kmCtrl.text.trim(),
-        };
-      case 'Immobilier':
-        return {
-          'prop_type': _propType,
-          'prop_deal': _propDeal,
-          'prop_surface': _surfaceCtrl.text.trim(),
-          'prop_rooms': _roomsCtrl.text.trim(),
-        };
-      case 'Electronique':
-        return {
-          'tech_brand': _brandCtrl.text.trim(),
-          'tech_condition': _techCondition,
-        };
-      case 'Emploi':
-        return {
-          'job_type': _jobType,
-          'job_salary': _salaryCtrl.text.trim(),
-        };
-      default:
-        return {};
-    }
-  }
-
-  Future<void> _submit() async {
+  Future<void> _publishAd() async {
+    if (!_formKey.currentState!.validate()) return;
     if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Row(children: [
-          Icon(Icons.warning, color: Colors.white), SizedBox(width: 8),
-          Text('Veuillez choisir une categorie!'),
-        ]),
-        backgroundColor: Colors.orange,
-      ));
+      _showError('Selectionnez une categorie');
       return;
     }
-    if (!_formKey.currentState!.validate()) return;
-
     setState(() => _loading = true);
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userJson = prefs.getString('current_user');
-      final user = userJson != null ? jsonDecode(userJson) : null;
-      final adsJson = prefs.getString('ads') ?? '[]';
-      final ads = List<Map<String, dynamic>>.from(
-          (jsonDecode(adsJson) as List).map((e) => Map<String, dynamic>.from(e)));
+      // Upload images
+      List<String> imageUrls = await _uploadImages();
 
-      final adId = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // Copy images to permanent storage
-      final List<String> permanentPaths = [];
-      for (int i = 0; i < _images.length; i++) {
-        try {
-          permanentPaths.add(await _copyImageToPermanentStorage(_images[i], adId, i));
-        } catch (_) {
-          permanentPaths.add(_images[i].path);
-        }
+      // Build attributes
+      Map<String, dynamic> attributes = {};
+      if (_selectedCategory == 'Voitures') {
+        attributes = {
+          'brand': _carBrand, 'model': _carModel,
+          'year': _carYear, 'km': _kmCtrl.text, 'condition': _carCondition,
+        };
+      } else if (_selectedCategory == 'Immobilier') {
+        attributes = {
+          'type': _propType, 'deal': _propDeal,
+          'surface': _surfaceCtrl.text, 'rooms': _roomsCtrl.text,
+        };
+      } else if (_selectedCategory == 'Electronique') {
+        attributes = {'brand': _brandCtrl.text, 'condition': _techCondition};
+      } else if (_selectedCategory == 'Emploi') {
+        attributes = {'job_type': _jobType, 'salary': _salaryCtrl.text};
       }
 
-      final newAd = {
-        'id': adId,
+      final userId = widget.currentUser?['id'];
+      final ad = {
+        'user_id': userId,
         'title': _titleCtrl.text.trim(),
-        'price': int.tryParse(_priceCtrl.text.trim()) ?? 0,
         'description': _descCtrl.text.trim(),
+        'price': double.tryParse(_priceCtrl.text.trim()) ?? 0,
+        'category': _selectedCategory!.toLowerCase(),
+        'location_city': _selectedCity ?? 'Dakar',
         'phone': _phoneCtrl.text.trim(),
-        'category': _selectedCategory,
-        'city': _selectedCity ?? user?['city'] ?? 'Dakar',
-        'user_id': user?['id'] ?? '',
-        'seller_name': user?['name'] ?? 'Vendeur',
-        'image_paths': permanentPaths,
-        'created_at': DateTime.now().toIso8601String(),
-        'is_active': true,
-        ..._getExtraFields(),
+        'images': imageUrls,
+        'attributes': attributes,
+        'is_boosted': false,
       };
 
-      ads.insert(0, newAd);
-      await prefs.setString('ads', jsonEncode(ads));
+      await supabase.from('listings').insert(ad);
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Row(children: [
-          Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 8),
-          Text('Annonce publiee avec succes!'),
-        ]),
-        backgroundColor: Color(0xFF00853F),
-        duration: Duration(seconds: 3),
-      ));
-
-      _titleCtrl.clear(); _priceCtrl.clear(); _descCtrl.clear();
-      setState(() { _selectedCategory = null; _selectedCity = null; _images = []; });
-      _resetCategoryFields();
-      _loadUserPhone();
       widget.onAdCreated();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Annonce publiee avec succes!'),
+          backgroundColor: Color(0xFF00853F),
+        ));
+        Navigator.pop(context);
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red));
+      _showError('Erreur: ${e.toString()}');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _titleCtrl.dispose(); _priceCtrl.dispose(); _descCtrl.dispose();
-    _phoneCtrl.dispose(); _kmCtrl.dispose(); _surfaceCtrl.dispose();
-    _roomsCtrl.dispose(); _brandCtrl.dispose(); _salaryCtrl.dispose();
-    super.dispose();
-  }
-
-  InputDecoration _dec(String hint, IconData icon) => InputDecoration(
-    hintText: hint,
-    prefixIcon: Icon(icon, color: const Color(0xFF00853F)),
-    filled: true, fillColor: const Color(0xFFF5F5F5),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF00853F), width: 2)),
-    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.red, width: 1)),
-    focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.red, width: 2)),
-  );
-
-  // ===== CATEGORY-SPECIFIC FIELDS WIDGET =====
-  Widget _buildCategoryFields() {
-    switch (_selectedCategory) {
-      case 'Voitures':
-        return _buildVoituresFields();
-      case 'Immobilier':
-        return _buildImmobilierFields();
-      case 'Electronique':
-        return _buildElectroniqueFields();
-      case 'Emploi':
-        return _buildEmploiFields();
-      default:
-        return const SizedBox.shrink();
+  void _showError(String msg) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      );
+      setState(() => _loading = false);
     }
-  }
-
-  Widget _buildVoituresFields() {
-    final years = List.generate(35, (i) => (2025 - i).toString());
-    return _sectionCard(
-      icon: Icons.directions_car,
-      color: const Color(0xFF1565C0),
-      title: 'Détails du véhicule',
-      children: [
-        _fieldLabel('Marque *'),
-        DropdownButtonFormField<String>(
-          value: _carBrand,
-          hint: const Text('Ex: Toyota, Renault...'),
-          decoration: _dec('', Icons.branding_watermark),
-          items: _carBrands.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-          onChanged: (v) => setState(() => _carBrand = v),
-          validator: (v) => v == null ? 'Choisissez la marque' : null,
-        ),
-        const SizedBox(height: 12),
-        _fieldLabel('Modèle'),
-        TextFormField(
-          onChanged: (v) => _carModel = v,
-          decoration: _dec('Ex: Corolla, Clio, 208...', Icons.directions_car_outlined),
-        ),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _fieldLabel('Année *'),
-            DropdownButtonFormField<String>(
-              value: _carYear,
-              hint: const Text('Année'),
-              decoration: _dec('', Icons.calendar_today),
-              items: years.map((y) => DropdownMenuItem(value: y, child: Text(y))).toList(),
-              onChanged: (v) => setState(() => _carYear = v),
-              validator: (v) => v == null ? 'Choisissez l\'année' : null,
-            ),
-          ])),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _fieldLabel('Kilométrage'),
-            TextFormField(
-              controller: _kmCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _dec('Ex: 85000', Icons.speed),
-            ),
-          ])),
-        ]),
-        const SizedBox(height: 12),
-        _fieldLabel('État du véhicule *'),
-        DropdownButtonFormField<String>(
-          value: _carCondition,
-          hint: const Text('Choisissez l\'état'),
-          decoration: _dec('', Icons.star_outline),
-          items: _carConditions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-          onChanged: (v) => setState(() => _carCondition = v),
-          validator: (v) => v == null ? 'Choisissez l\'état' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildImmobilierFields() {
-    return _sectionCard(
-      icon: Icons.home,
-      color: const Color(0xFF6A1B9A),
-      title: 'Détails du bien',
-      children: [
-        _fieldLabel('Type de bien *'),
-        DropdownButtonFormField<String>(
-          value: _propType,
-          hint: const Text('Appartement, Villa...'),
-          decoration: _dec('', Icons.home_outlined),
-          items: _propTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => setState(() => _propType = v),
-          validator: (v) => v == null ? 'Choisissez le type' : null,
-        ),
-        const SizedBox(height: 12),
-        _fieldLabel('Type d\'offre *'),
-        Row(children: [
-          Expanded(child: GestureDetector(
-            onTap: () => setState(() => _propDeal = 'Vente'),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: _propDeal == 'Vente' ? const Color(0xFF6A1B9A) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _propDeal == 'Vente' ? const Color(0xFF6A1B9A) : Colors.grey.shade300),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.sell, color: _propDeal == 'Vente' ? Colors.white : Colors.grey, size: 18),
-                const SizedBox(width: 6),
-                Text('Vente', style: TextStyle(
-                  color: _propDeal == 'Vente' ? Colors.white : Colors.grey[700],
-                  fontWeight: FontWeight.bold,
-                )),
-              ]),
-            ),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: GestureDetector(
-            onTap: () => setState(() => _propDeal = 'Location'),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: _propDeal == 'Location' ? const Color(0xFF6A1B9A) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _propDeal == 'Location' ? const Color(0xFF6A1B9A) : Colors.grey.shade300),
-              ),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.key, color: _propDeal == 'Location' ? Colors.white : Colors.grey, size: 18),
-                const SizedBox(width: 6),
-                Text('Location', style: TextStyle(
-                  color: _propDeal == 'Location' ? Colors.white : Colors.grey[700],
-                  fontWeight: FontWeight.bold,
-                )),
-              ]),
-            ),
-          )),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _fieldLabel('Surface (m²)'),
-            TextFormField(
-              controller: _surfaceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _dec('Ex: 80', Icons.square_foot),
-            ),
-          ])),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _fieldLabel('Nb. pièces'),
-            TextFormField(
-              controller: _roomsCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _dec('Ex: 3', Icons.meeting_room),
-            ),
-          ])),
-        ]),
-      ],
-    );
-  }
-
-  Widget _buildElectroniqueFields() {
-    return _sectionCard(
-      icon: Icons.phone_android,
-      color: const Color(0xFF00838F),
-      title: 'Détails de l\'appareil',
-      children: [
-        _fieldLabel('Marque'),
-        TextFormField(
-          controller: _brandCtrl,
-          decoration: _dec('Ex: Samsung, Apple, HP...', Icons.branding_watermark),
-        ),
-        const SizedBox(height: 12),
-        _fieldLabel('État *'),
-        DropdownButtonFormField<String>(
-          value: _techCondition,
-          hint: const Text('Choisissez l\'état'),
-          decoration: _dec('', Icons.star_outline),
-          items: _techConditions.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-          onChanged: (v) => setState(() => _techCondition = v),
-          validator: (v) => v == null ? 'Choisissez l\'état' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmploiFields() {
-    return _sectionCard(
-      icon: Icons.work,
-      color: const Color(0xFFE65100),
-      title: 'Détails du poste',
-      children: [
-        _fieldLabel('Type de contrat *'),
-        DropdownButtonFormField<String>(
-          value: _jobType,
-          hint: const Text('Temps plein, Stage...'),
-          decoration: _dec('', Icons.work_outline),
-          items: _jobTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-          onChanged: (v) => setState(() => _jobType = v),
-          validator: (v) => v == null ? 'Choisissez le type' : null,
-        ),
-        const SizedBox(height: 12),
-        _fieldLabel('Salaire proposé (FCFA)'),
-        TextFormField(
-          controller: _salaryCtrl,
-          keyboardType: TextInputType.number,
-          decoration: _dec('Ex: 200000 (laisser vide si non précisé)', Icons.payments_outlined),
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionCard({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-            ),
-            child: Row(children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: const Color(0xFF00853F),
-        automaticallyImplyLeading: false,
-        title: const Text('Publier une annonce',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        foregroundColor: Colors.white,
+        title: const Text('Publier une annonce'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-
-                // ===== STEP 1: CATEGORY =====
-                _stepHeader('1', 'Choisir une catégorie', required: true),
-                const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 5, childAspectRatio: 0.85,
-                    crossAxisSpacing: 8, mainAxisSpacing: 8,
-                  ),
-                  itemCount: _categories.length,
-                  itemBuilder: (_, i) {
-                    final cat = _categories[i];
-                    final isSelected = _selectedCategory == cat['name'];
-                    return GestureDetector(
-                      onTap: () => setState(() {
-                        _selectedCategory = cat['name'];
-                        _resetCategoryFields();
-                      }),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        decoration: BoxDecoration(
-                          color: isSelected ? cat['color'] as Color : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? cat['color'] as Color : Colors.grey.shade200,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          boxShadow: isSelected ? [BoxShadow(
-                            color: (cat['color'] as Color).withOpacity(0.3),
-                            blurRadius: 8, offset: const Offset(0, 3),
-                          )] : [],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(cat['icon'] as IconData,
-                                color: isSelected ? Colors.white : cat['color'] as Color, size: 22),
-                            const SizedBox(height: 3),
-                            Text(cat['name'] as String,
-                                style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
-                                    color: isSelected ? Colors.white : Colors.grey[700]),
-                                textAlign: TextAlign.center, maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Categorie *'),
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: _categories.map((cat) {
+                  final active = _selectedCategory == cat['name'];
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = cat['name']),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: active ? cat['color'] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    );
-                  },
-                ),
-                if (_selectedCategory != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(children: [
-                      const Icon(Icons.check_circle, color: Color(0xFF00853F), size: 16),
-                      const SizedBox(width: 4),
-                      Text('Catégorie: $_selectedCategory',
-                          style: const TextStyle(color: Color(0xFF00853F), fontWeight: FontWeight.w600)),
-                    ]),
-                  ),
-                const SizedBox(height: 20),
-
-                // ===== CATEGORY SPECIFIC FIELDS =====
-                if (_selectedCategory != null && ['Voitures','Immobilier','Electronique','Emploi'].contains(_selectedCategory))
-                  _buildCategoryFields(),
-
-                // ===== STEP 2: PHOTOS =====
-                _stepHeader('2', 'Ajouter des photos (optionnel, max 4)'),
-                const SizedBox(height: 10),
-                SizedBox(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(cat['icon'] as IconData, size: 16, color: active ? Colors.white : Colors.grey[700]),
+                          const SizedBox(width: 4),
+                          Text(cat['name'], style: TextStyle(color: active ? Colors.white : Colors.grey[700], fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              _sectionTitle('Photos'),
+              GestureDetector(
+                onTap: _pickImages,
+                child: Container(
                   height: 100,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      if (_images.length < 4)
-                        GestureDetector(
-                          onTap: _showImageSourceSheet,
-                          child: Container(
-                            width: 100, height: 100,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300, width: 1.5),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_photo_alternate, color: Colors.grey[400], size: 32),
-                                const SizedBox(height: 4),
-                                Text('Ajouter\nphoto', textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-                              ],
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey[50],
+                  ),
+                  child: _images.isEmpty
+                      ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.add_a_photo, color: Colors.grey, size: 32),
+                          Text('Ajouter des photos', style: TextStyle(color: Colors.grey)),
+                        ]))
+                      : ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _images.length,
+                          itemBuilder: (_, i) => Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(_images[i], width: 80, height: 80, fit: BoxFit.cover),
                             ),
                           ),
                         ),
-                      ..._images.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final img = entry.value;
-                        return Stack(children: [
-                          Container(
-                            width: 100, height: 100,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              image: DecorationImage(image: FileImage(img), fit: BoxFit.cover),
-                            ),
-                          ),
-                          Positioned(top: 4, right: 12,
-                            child: GestureDetector(
-                              onTap: () => setState(() => _images.removeAt(idx)),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                child: const Icon(Icons.close, color: Colors.white, size: 14),
-                              ),
-                            ),
-                          ),
-                          if (idx == 0)
-                            Positioned(bottom: 4, left: 4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                    color: const Color(0xFF00853F),
-                                    borderRadius: BorderRadius.circular(8)),
-                                child: const Text('Principal',
-                                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                              ),
-                            ),
-                        ]);
-                      }).toList(),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 20),
-
-                // ===== STEP 3: DETAILS =====
-                _stepHeader('3', 'Détails de l\'annonce'),
-                const SizedBox(height: 10),
-                _fieldLabel('Titre *'),
-                TextFormField(
-                  controller: _titleCtrl,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: _dec('Ex: Toyota Corolla 2018 automatique', Icons.title),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Le titre est obligatoire' : null,
-                ),
-                const SizedBox(height: 12),
-                _fieldLabel(_selectedCategory == 'Emploi' ? 'Salaire (FCFA) *' : 'Prix (FCFA) *'),
-                TextFormField(
-                  controller: _priceCtrl,
+              ),
+              const SizedBox(height: 16),
+              _buildField(_titleCtrl, 'Titre *', Icons.title,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Titre requis' : null),
+              const SizedBox(height: 12),
+              _buildField(_priceCtrl, 'Prix (FCFA) *', Icons.monetization_on,
                   keyboardType: TextInputType.number,
-                  decoration: _dec('Ex: 3500000', Icons.payments_outlined),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Le prix est obligatoire';
-                    if (int.tryParse(v.trim()) == null) return 'Entrez un prix valide';
-                    return null;
-                  },
+                  validator: (v) => (v == null || v.isEmpty) ? 'Prix requis' : null),
+              const SizedBox(height: 12),
+              _buildField(_descCtrl, 'Description', Icons.description, maxLines: 3),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedCity,
+                decoration: InputDecoration(
+                  labelText: 'Ville',
+                  prefixIcon: const Icon(Icons.location_city),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true, fillColor: Colors.grey[50],
                 ),
-                const SizedBox(height: 12),
-                _fieldLabel('Description *'),
-                TextFormField(
-                  controller: _descCtrl,
-                  maxLines: 4, maxLength: 500,
-                  decoration: _dec('Decrivez votre annonce...', Icons.description_outlined),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'La description est obligatoire';
-                    if (v.trim().length < 10) return 'Description trop courte (min 10 caracteres)';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                _fieldLabel('Téléphone de contact *'),
-                TextFormField(
-                  controller: _phoneCtrl,
+                items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (v) => setState(() => _selectedCity = v),
+              ),
+              const SizedBox(height: 12),
+              _buildField(_phoneCtrl, 'Telephone vendeur *', Icons.phone,
                   keyboardType: TextInputType.phone,
-                  decoration: _dec('+221 77 XXX XX XX', Icons.phone_outlined),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Le téléphone est obligatoire';
-                    if (v.replaceAll(RegExp(r'[^0-9]'), '').length < 8) return 'Numéro invalide';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                _fieldLabel('Ville *'),
-                DropdownButtonFormField<String>(
-                  value: _selectedCity,
-                  hint: const Text('Sélectionnez votre ville'),
-                  decoration: _dec('', Icons.location_on_outlined),
-                  items: _cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (v) => setState(() => _selectedCity = v),
-                  validator: (v) => v == null ? 'Sélectionnez une ville' : null,
-                ),
-                const SizedBox(height: 28),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Telephone requis' : null),
 
-                // Submit button
-                SizedBox(
-                  width: double.infinity, height: 56,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00853F),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 3,
-                    ),
-                    child: _loading
-                        ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            SizedBox(width: 20, height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                            SizedBox(width: 12),
-                            Text('Publication...', style: TextStyle(color: Colors.white, fontSize: 16)),
-                          ])
-                        : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Icon(Icons.publish, color: Colors.white),
-                            SizedBox(width: 8),
-                            Text('Publier l\'annonce',
-                                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                          ]),
+              // Category-specific fields
+              if (_selectedCategory == 'Voitures') ..._buildCarFields(),
+              if (_selectedCategory == 'Immobilier') ..._buildRealEstateFields(),
+              if (_selectedCategory == 'Electronique') ..._buildElectroFields(),
+              if (_selectedCategory == 'Emploi') ..._buildJobFields(),
+
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _publishAd,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00853F),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
+                  child: _loading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('Publier l\'annonce', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-                const SizedBox(height: 30),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _stepHeader(String step, String title, {bool required = false}) {
-    return Row(children: [
-      Container(
-        width: 28, height: 28,
-        decoration: const BoxDecoration(color: Color(0xFF00853F), shape: BoxShape.circle),
-        child: Center(child: Text(step,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
+  List<Widget> _buildCarFields() => [
+    const SizedBox(height: 16),
+    _sectionTitle('Details Vehicule'),
+    Row(children: [
+      Expanded(child: _buildDropdown('Marque', ['Toyota', 'Peugeot', 'Renault', 'Mercedes', 'BMW', 'Honda', 'Hyundai', 'Kia', 'Nissan', 'Ford', 'Autre'],
+          _carBrand, (v) => setState(() => _carBrand = v))),
+      const SizedBox(width: 8),
+      Expanded(child: _buildField(_kmCtrl, 'Kilometrage', Icons.speed, keyboardType: TextInputType.number)),
+    ]),
+    const SizedBox(height: 8),
+    Row(children: [
+      Expanded(child: _buildDropdown('Annee', List.generate(30, (i) => (2025 - i).toString()),
+          _carYear, (v) => setState(() => _carYear = v))),
+      const SizedBox(width: 8),
+      Expanded(child: _buildDropdown('Etat', ['Neuf', 'Tres bon', 'Bon', 'Acceptable'],
+          _carCondition, (v) => setState(() => _carCondition = v))),
+    ]),
+  ];
+
+  List<Widget> _buildRealEstateFields() => [
+    const SizedBox(height: 16),
+    _sectionTitle('Details Immobilier'),
+    Row(children: [
+      Expanded(child: _buildDropdown('Type', ['Appartement', 'Villa', 'Studio', 'Maison', 'Terrain', 'Bureau'],
+          _propType, (v) => setState(() => _propType = v))),
+      const SizedBox(width: 8),
+      Expanded(child: _buildDropdown('Transaction', ['Vente', 'Location'],
+          _propDeal, (v) => setState(() => _propDeal = v))),
+    ]),
+    const SizedBox(height: 8),
+    Row(children: [
+      Expanded(child: _buildField(_surfaceCtrl, 'Surface (m²)', Icons.square_foot, keyboardType: TextInputType.number)),
+      const SizedBox(width: 8),
+      Expanded(child: _buildField(_roomsCtrl, 'Nb pieces', Icons.bed, keyboardType: TextInputType.number)),
+    ]),
+  ];
+
+  List<Widget> _buildElectroFields() => [
+    const SizedBox(height: 16),
+    _sectionTitle('Details Electronique'),
+    Row(children: [
+      Expanded(child: _buildField(_brandCtrl, 'Marque', Icons.business)),
+      const SizedBox(width: 8),
+      Expanded(child: _buildDropdown('Etat', ['Neuf', 'Tres bon', 'Bon', 'Acceptable'],
+          _techCondition, (v) => setState(() => _techCondition = v))),
+    ]),
+  ];
+
+  List<Widget> _buildJobFields() => [
+    const SizedBox(height: 16),
+    _sectionTitle('Details Emploi'),
+    Row(children: [
+      Expanded(child: _buildDropdown('Type contrat', ['CDI', 'CDD', 'Stage', 'Freelance', 'Temps partiel'],
+          _jobType, (v) => setState(() => _jobType = v))),
+      const SizedBox(width: 8),
+      Expanded(child: _buildField(_salaryCtrl, 'Salaire (FCFA)', Icons.monetization_on, keyboardType: TextInputType.number)),
+    ]),
+  ];
+
+  Widget _sectionTitle(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+  );
+
+  Widget _buildField(TextEditingController ctrl, String label, IconData icon, {
+    TextInputType? keyboardType, int maxLines = 1, String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true, fillColor: Colors.grey[50],
       ),
-      const SizedBox(width: 10),
-      Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-      if (required) const Text('*', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-    ]);
+    );
   }
 
-  Widget _fieldLabel(String text) => Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black87)));
+  Widget _buildDropdown(String label, List<String> items, String? value, ValueChanged<String?> onChanged) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true, fillColor: Colors.grey[50],
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(fontSize: 13)))).toList(),
+      onChanged: onChanged,
+    );
+  }
 }
