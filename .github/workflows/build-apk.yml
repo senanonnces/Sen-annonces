@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build APK and AAB
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout code
@@ -17,15 +17,8 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 35
-        run: |
-          yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" 2>/dev/null || true
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -40,6 +33,11 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
           cat android/local.properties
 
+      - name: Install Android SDK 35
+        run: |
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          ls $ANDROID_SDK_ROOT/platforms/
+
       - name: Create Keystore
         run: |
           keytool -genkey -v \
@@ -49,12 +47,11 @@ jobs:
             -storepass senannonces123 -keypass senannonces123 \
             -dname "CN=Sen Annonces,OU=Mobile,O=SenAnnonces,L=Dakar,S=Dakar,C=SN"
 
-      - name: Configure signing in build.gradle
+      - name: Configure signing
         run: |
           python3 - << 'PYEOF'
           with open("android/app/build.gradle", "r") as f:
               content = f.read()
-          
           signing = """
               signingConfigs {
                   release {
@@ -65,24 +62,14 @@ jobs:
                   }
               }
           """
-          
-          # Add signing config before buildTypes
+          content = content.replace("    buildTypes {", signing + "    buildTypes {")
           content = content.replace(
-              "    buildTypes {",
-              signing + "    buildTypes {"
+              "signingConfig signingConfigs.debug",
+              "signingConfig signingConfigs.release"
           )
-          
-          # Update release buildType to use signing
-          content = content.replace(
-              """        release {
-                signingConfig signingConfigs.debug""",
-              """        release {
-                signingConfig signingConfigs.release"""
-          )
-          
           with open("android/app/build.gradle", "w") as f:
               f.write(content)
-          print("build.gradle updated!")
+          print("Done!")
           PYEOF
 
       - name: Get dependencies
