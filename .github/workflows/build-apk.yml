@@ -36,6 +36,16 @@ jobs:
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
+      - name: Update SDK versions to 35
+        run: |
+          # Update compileSdkVersion and targetSdkVersion to 35
+          sed -i 's/compileSdk = .*/compileSdk = 35/' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle || true
+          sed -i 's/targetSdk = .*/targetSdk = 35/' android/app/build.gradle || true
+          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle || true
+          echo "Updated build.gradle:"
+          cat android/app/build.gradle
+
       - name: Write AndroidManifest with INTERNET permission
         run: |
           python3 - << 'PYEOF'
