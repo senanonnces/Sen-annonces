@@ -32,14 +32,6 @@ jobs:
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
-      - name: Install Android SDK 35
-        run: |
-          wget -q "https://dl.google.com/android/repository/platform-35_r02.zip" -O /tmp/android-35.zip
-          mkdir -p $ANDROID_SDK_ROOT/platforms/android-35
-          unzip -q /tmp/android-35.zip -d /tmp/android-35-tmp
-          cp -r /tmp/android-35-tmp/android-35/* $ANDROID_SDK_ROOT/platforms/android-35/
-          echo "Android 35 installed: $(ls $ANDROID_SDK_ROOT/platforms/android-35/ | head -3)"
-
       - name: Create Keystore
         run: |
           keytool -genkey -v \
