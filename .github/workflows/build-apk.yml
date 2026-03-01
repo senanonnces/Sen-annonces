@@ -25,12 +25,16 @@ jobs:
         with:
           flutter-version: '3.22.0'
           channel: 'stable'
-          cache: true
+          cache: false
 
       - name: Setup local.properties
         run: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          FLUTTER_BIN=$(which flutter)
+          FLUTTER_SDK=$(dirname $(dirname $FLUTTER_BIN))
+          echo "Flutter SDK path: $FLUTTER_SDK"
+          echo "flutter.sdk=$FLUTTER_SDK" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          cat android/local.properties
 
       - name: Create Keystore
         run: |
