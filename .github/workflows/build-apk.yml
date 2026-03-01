@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     name: Build APK and AAB
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -17,13 +17,13 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
+          flutter-version: '3.22.0'
           channel: 'stable'
           cache: true
 
@@ -31,12 +31,24 @@ jobs:
         run: |
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
-          cat android/local.properties
 
-      - name: Install Android SDK 35
+      - name: Update compileSdk and targetSdk to 35
         run: |
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          ls $ANDROID_SDK_ROOT/platforms/
+          sed -i 's/compileSdk [0-9]*/compileSdk 35/' android/app/build.gradle
+          sed -i 's/targetSdk [0-9]*/targetSdk 35/' android/app/build.gradle
+          # Download android-35 platform manually
+          wget -q "https://dl.google.com/android/repository/platform-35_r02.zip" -O /tmp/android-35.zip || true
+          if [ -f /tmp/android-35.zip ]; then
+            mkdir -p $ANDROID_SDK_ROOT/platforms/android-35
+            unzip -q /tmp/android-35.zip -d /tmp/android-35-extracted
+            cp -r /tmp/android-35-extracted/android-35/* $ANDROID_SDK_ROOT/platforms/android-35/
+            echo "Platform 35 installed manually"
+          else
+            # Fallback: use compileSdk 34
+            sed -i 's/compileSdk 35/compileSdk 34/' android/app/build.gradle
+            echo "Using compileSdk 34 as fallback"
+          fi
+          grep "compileSdk\|targetSdk" android/app/build.gradle
 
       - name: Create Keystore
         run: |
@@ -52,7 +64,8 @@ jobs:
           python3 - << 'PYEOF'
           with open("android/app/build.gradle", "r") as f:
               content = f.read()
-          signing = """
+          if "signingConfigs" not in content:
+              signing = """
               signingConfigs {
                   release {
                       storeFile file('keystore.jks')
@@ -62,11 +75,8 @@ jobs:
                   }
               }
           """
-          content = content.replace("    buildTypes {", signing + "    buildTypes {")
-          content = content.replace(
-              "signingConfig signingConfigs.debug",
-              "signingConfig signingConfigs.release"
-          )
+              content = content.replace("    buildTypes {", signing + "    buildTypes {")
+          content = content.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
           with open("android/app/build.gradle", "w") as f:
               f.write(content)
           print("Done!")
