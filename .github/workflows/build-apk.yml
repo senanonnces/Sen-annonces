@@ -36,6 +36,12 @@ jobs:
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
+      - name: Install Android SDK 35
+        run: |
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+          ls $ANDROID_SDK_ROOT/platforms/ || true
+
       - name: Update SDK versions to 35
         run: |
           # Update compileSdkVersion and targetSdkVersion to 35
