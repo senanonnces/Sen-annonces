@@ -32,23 +32,13 @@ jobs:
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
-      - name: Update compileSdk and targetSdk to 35
+      - name: Install Android SDK 35
         run: |
-          sed -i 's/compileSdk [0-9]*/compileSdk 35/' android/app/build.gradle
-          sed -i 's/targetSdk [0-9]*/targetSdk 35/' android/app/build.gradle
-          # Download android-35 platform manually
-          wget -q "https://dl.google.com/android/repository/platform-35_r02.zip" -O /tmp/android-35.zip || true
-          if [ -f /tmp/android-35.zip ]; then
-            mkdir -p $ANDROID_SDK_ROOT/platforms/android-35
-            unzip -q /tmp/android-35.zip -d /tmp/android-35-extracted
-            cp -r /tmp/android-35-extracted/android-35/* $ANDROID_SDK_ROOT/platforms/android-35/
-            echo "Platform 35 installed manually"
-          else
-            # Fallback: use compileSdk 34
-            sed -i 's/compileSdk 35/compileSdk 34/' android/app/build.gradle
-            echo "Using compileSdk 34 as fallback"
-          fi
-          grep "compileSdk\|targetSdk" android/app/build.gradle
+          wget -q "https://dl.google.com/android/repository/platform-35_r02.zip" -O /tmp/android-35.zip
+          mkdir -p $ANDROID_SDK_ROOT/platforms/android-35
+          unzip -q /tmp/android-35.zip -d /tmp/android-35-tmp
+          cp -r /tmp/android-35-tmp/android-35/* $ANDROID_SDK_ROOT/platforms/android-35/
+          echo "Android 35 installed: $(ls $ANDROID_SDK_ROOT/platforms/android-35/ | head -3)"
 
       - name: Create Keystore
         run: |
@@ -58,29 +48,6 @@ jobs:
             -alias senannonces \
             -storepass senannonces123 -keypass senannonces123 \
             -dname "CN=Sen Annonces,OU=Mobile,O=SenAnnonces,L=Dakar,S=Dakar,C=SN"
-
-      - name: Configure signing
-        run: |
-          python3 - << 'PYEOF'
-          with open("android/app/build.gradle", "r") as f:
-              content = f.read()
-          if "signingConfigs" not in content:
-              signing = """
-              signingConfigs {
-                  release {
-                      storeFile file('keystore.jks')
-                      storePassword 'senannonces123'
-                      keyAlias 'senannonces'
-                      keyPassword 'senannonces123'
-                  }
-              }
-          """
-              content = content.replace("    buildTypes {", signing + "    buildTypes {")
-          content = content.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
-          with open("android/app/build.gradle", "w") as f:
-              f.write(content)
-          print("Done!")
-          PYEOF
 
       - name: Get dependencies
         run: flutter pub get
