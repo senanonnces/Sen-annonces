@@ -20,10 +20,18 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" 2>/dev/null || true
+          sdkmanager --list_installed | grep "android-35" || echo "SDK 35 status checked"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
 
@@ -32,33 +40,32 @@ jobs:
           flutter create --org com.senannonces --project-name sen_annonces --platforms android /tmp/flutter_base
           rm -rf android
           cp -r /tmp/flutter_base/android .
-          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.23"/' android/build.gradle || true
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
 
-      - name: Install Android SDK 35
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
-
-      - name: Update SDK versions to 35
+      - name: Update SDK to 35
         run: |
-          # Update compileSdkVersion and targetSdkVersion to 35
-          sed -i 's/compileSdk = .*/compileSdk = 35/' android/app/build.gradle || true
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle || true
-          sed -i 's/targetSdk = .*/targetSdk = 35/' android/app/build.gradle || true
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle || true
-          echo "Updated build.gradle:"
-          cat android/app/build.gradle
+          python3 - << 'PYEOF'
+          import re
+          with open("android/app/build.gradle", "r") as f:
+              content = f.read()
+          content = re.sub(r'compileSdk\s*=?\s*\d+', 'compileSdk = 35', content)
+          content = re.sub(r'targetSdk\s*=?\s*\d+', 'targetSdk = 35', content)
+          content = re.sub(r'compileSdkVersion\s+\d+', 'compileSdkVersion 35', content)
+          content = re.sub(r'targetSdkVersion\s+\d+', 'targetSdkVersion 35', content)
+          with open("android/app/build.gradle", "w") as f:
+              f.write(content)
+          print("Updated build.gradle:")
+          print(content[:500])
+          PYEOF
 
-      - name: Write AndroidManifest with INTERNET permission
+      - name: Write AndroidManifest
         run: |
           python3 - << 'PYEOF'
           manifest = """<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
               <application
                   android:label="Sen Annonces"
                   android:name="${applicationName}"
@@ -88,20 +95,17 @@ jobs:
           """
           with open("android/app/src/main/AndroidManifest.xml", "w") as f:
               f.write(manifest)
-          print("AndroidManifest.xml written successfully!")
+          print("AndroidManifest.xml written!")
           PYEOF
 
       - name: Create Keystore
         run: |
           keytool -genkey -v \
             -keystore android/app/keystore.jks \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
+            -keyalg RSA -keysize 2048 -validity 10000 \
             -alias senannonces \
-            -storepass senannonces123 \
-            -keypass senannonces123 \
-            -dname "CN=Sen Annonces, OU=Mobile, O=SenAnnonces, L=Dakar, S=Dakar, C=SN"
+            -storepass senannonces123 -keypass senannonces123 \
+            -dname "CN=Sen Annonces,OU=Mobile,O=SenAnnonces,L=Dakar,S=Dakar,C=SN"
 
       - name: Configure signing
         run: |
