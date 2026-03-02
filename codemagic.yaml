@@ -8,8 +8,11 @@ workflows:
     scripts:
       - name: Set up local.properties
         script: |
-          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
+          echo "Flutter SDK: $FLUTTER_SDK"
+          echo "flutter.sdk=$FLUTTER_SDK" > android/local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          cat android/local.properties
       - name: Create keystore
         script: |
           keytool -genkey -v -keystore android/app/keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias senannonces -storepass senannonces123 -keypass senannonces123 -dname "CN=Sen Annonces,OU=Mobile,O=SenAnnonces,L=Dakar,S=Dakar,C=SN"
