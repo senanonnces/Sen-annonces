@@ -1,0 +1,27 @@
+workflows:
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    environment:
+      flutter: 3.22.0
+      java: 17
+    scripts:
+      - name: Set up local.properties
+        script: |
+          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+      - name: Create keystore
+        script: |
+          keytool -genkey -v \
+            -keystore android/app/keystore.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias senannonces \
+            -storepass senannonces123 -keypass senannonces123 \
+            -dname "CN=Sen Annonces,OU=Mobile,O=SenAnnonces,L=Dakar,S=Dakar,C=SN"
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build AAB
+        script: flutter build appbundle --release --no-tree-shake-icons
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
+      - build/app/outputs/flutter-apk/app-release.apk
